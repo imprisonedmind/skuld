@@ -25,7 +25,7 @@ if [[ -n "$TAG" && -n "$SHA" ]]; then
   cat >> "$TAP_DIR/Formula/skuld.rb" <<RUBY
   url "https://github.com/imprisonedmind/skuld/archive/refs/tags/$TAG.tar.gz"
   sha256 "$SHA"
-  license :cannot_represent
+  license "mit"
 RUBY
 fi
 

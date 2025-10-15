@@ -5,5 +5,5 @@
   "bin": {
     "skuld": "bin/skuld.js"
   },
-  "license": "UNLICENSED"
+  "license": "MIT"
 }

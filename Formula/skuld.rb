@@ -2,6 +2,7 @@ class Skuld < Formula
   desc "Skuld: WakaTime + Git → Jira worklogs"
   homepage "https://github.com/imprisonedmind/skuld"
   head "https://github.com/imprisonedmind/skuld.git", branch: "main"
+  license "mit"
 
   depends_on "python"
 

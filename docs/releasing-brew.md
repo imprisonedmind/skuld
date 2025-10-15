@@ -22,7 +22,7 @@ class Skuld < Formula
   homepage "https://github.com/imprisonedmind/skuld"
   url "https://github.com/imprisonedmind/skuld/archive/refs/tags/v0.1.1.tar.gz"
   sha256 "<RELEASE_TARBALL_SHA256>"
-  license :cannot_represent
+  license "mit"
 
   head "https://github.com/imprisonedmind/skuld.git", branch: "main"
 
@@ -53,5 +53,5 @@ Updating
 - Users can `brew upgrade skuld`.
 
 Notes
-- `license :cannot_represent` is acceptable in a tap for a proprietary license (see this repo’s LICENSE). For Homebrew/core, an OSI-approved license is required.
-- Keep the test non‑network and deterministic (we call `sync today --test`).
+- License: MIT (OSI-approved). Homebrew/core requires an OSI-approved license.
+- Keep the test non‑network and deterministic (we call `--help`).
