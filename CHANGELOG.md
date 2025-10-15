@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.10
+- Release: script now publishes to npm by default alongside Homebrew tap update (set `SKULD_NPM_PUBLISH=0` to skip).
+- Node shim: set `PYTHONPATH` for cross‑platform (Linux) installs via npm.
+
 ## v0.1.9
 - WakaTime Durations: use precise sub‑day durations for short windows (today/yesterday/24h); fall back to Summaries for longer ranges.
 - Worklog timing: add configurable `time.startedPolicy` with options `now` (default), `periodEnd`, `lastCommit`, and `fixed` (`time.startedFixedTime: HH:MM`).
