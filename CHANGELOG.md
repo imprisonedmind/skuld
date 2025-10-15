@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.9
+- WakaTime Durations: use precise sub‑day durations for short windows (today/yesterday/24h); fall back to Summaries for longer ranges.
+- Worklog timing: add configurable `time.startedPolicy` with options `now` (default), `periodEnd`, `lastCommit`, and `fixed` (`time.startedFixedTime: HH:MM`).
+- Docs: updated printer examples for `--test` and upload; README adds ticket‑status bullet and license info.
+
 ## v0.1.8
 - Uploads: when a Jira status transition occurs during upload (e.g., To Do → In Progress), append a note to the worklog/issue comment: "Updating status from XYZ to ABC".
 
