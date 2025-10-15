@@ -6,9 +6,18 @@ def format_seconds(secs: float) -> str:
     parts = []
     if h:
         parts.append(f"{h}h")
-    if m or (h and s):
+    if m or h:
         parts.append(f"{m}m")
-    if s and not h:
+    if s:
         parts.append(f"{s}s")
     return " ".join(parts) if parts else "0m"
 
+
+def format_date(dtobj) -> str:
+    # dd/mm/yy
+    return dtobj.strftime("%d/%m/%y")
+
+
+def format_time(dtobj) -> str:
+    # 12-hour time with AM/PM (no leading zero hour)
+    return dtobj.strftime("%-I:%M %p") if hasattr(dtobj, "strftime") else str(dtobj)
