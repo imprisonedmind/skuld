@@ -9,7 +9,12 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 - Posts a worklog and a separate issue comment with a [SKULD] header
 - Idempotent: won’t double‑post the same (issue, window, delta)
 
-## Install (Homebrew)
+## Install Overview
+- Choose one method per machine to avoid PATH conflicts.
+  - macOS: use Homebrew.
+  - Linux: use npm.
+
+## Install (macOS via Homebrew)
 - Stable (recommended):
   - `brew tap imprisonedmind/skuld`
   - `brew install skuld`
@@ -19,13 +24,21 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
   - `brew install --HEAD https://raw.githubusercontent.com/imprisonedmind/skuld/main/Formula/skuld.rb`
   - Useful for testing unreleased changes.
 
-## Install (npm)
+## Install (Linux via npm)
 - Prereqs: Node.js/npm and Python 3 available in your PATH.
 - Global install:
   - `npm install -g skuld-cli`
 - Verify:
   - `skuld --help`
   - The Node shim will try `python3` (then `python`) and sets `PYTHONPATH` automatically.
+
+Troubleshooting
+- "EEXIST: file already exists" when installing via npm usually means another `skuld` binary is already on PATH (e.g., from Homebrew on macOS).
+  - If switching from Homebrew to npm: `brew uninstall skuld` first, then `npm install -g skuld-cli`.
+  - Alternatively, install npm packages into your user prefix to avoid Homebrew’s global prefix:
+    - `npm config set prefix ~/.local && echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc` (adjust shell/rc accordingly)
+    - Then `npm install -g skuld-cli`
+  - You can also use `npm install -g --force skuld-cli`, but prefer removing the conflicting binary to avoid ambiguity.
 
 ## Setup (one‑time)
 - Configure your credentials:
