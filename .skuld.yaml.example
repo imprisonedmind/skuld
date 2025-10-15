@@ -1,0 +1,37 @@
+# Jira / MCP
+jira:
+  site: https://your-org.atlassian.net
+  email: your.email@your.org
+  apiToken: YOUR_JIRA_API_TOKEN
+mcp:
+  endpoint: http://localhost:port
+  auth: YOUR_MCP_AUTH_TOKEN
+
+# Matching & behavior
+regex:
+  issueKey: "[A-Z][A-Z0-9]+-\\d+"
+time:
+  zone: local
+  minLogMinutes: parity  # keep exact parity with WakaTime totals
+  aggregationWindow: cli
+
+projects:
+  "/path/to/repo":
+    wakatimeProject: my-project
+    jiraProjectKey: SOT
+
+comment:
+  maxLines: 5
+  includeCommitHashes: true
+
+state:
+  path: ~/.local/share/skuld/state.sqlite
+
+llm:
+  enabled: true
+  maxCommits: 10
+  includeDiff: false
+  promptTemplatePath: null
+
+wakatime:
+  apiKey: YOUR_WAKATIME_API_KEY

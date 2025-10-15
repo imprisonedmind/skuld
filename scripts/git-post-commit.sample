@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Sample Git post-commit hook to trigger local skuld preview.
+# Copy to .git/hooks/post-commit and make executable.
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+COMMIT_HASH="$(git rev-parse HEAD)"
+
+# Optionally pass repo path for project mapping; run in background.
+python3 -m skuld.cli sync today \
+  --project "$REPO_ROOT" \
+  --test \
+  >/dev/null 2>&1 &
+
+exit 0
