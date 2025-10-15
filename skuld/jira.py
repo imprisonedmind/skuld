@@ -3,6 +3,7 @@ import json
 from typing import Dict, List, Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 import ssl
 import datetime as dt
 
@@ -195,6 +196,85 @@ def get_issue(site: str, email: str, api_token: str, key: str, timeout: int = 10
                 "assigneeAccountId": acct,
                 "assigneeEmail": email_addr,
             }, None
+    except Exception as e:
+        return None, str(e)
+
+
+def _fmt_started(dtobj: dt.datetime) -> str:
+    # Jira expects: 2025-10-15T12:34:56.000+0000
+    if dtobj.tzinfo is None:
+        dtobj = dtobj.astimezone()
+    return dtobj.strftime("%Y-%m-%dT%H:%M:%S.000%z")
+
+
+def _to_adf(comment_text: str) -> dict:
+    # Build a minimal Atlassian Document Format for the comment
+    lines = [ln.strip() for ln in (comment_text or "").splitlines() if ln.strip()]
+    content = []
+    for ln in lines:
+        content.append({
+            "type": "paragraph",
+            "content": [{"type": "text", "text": ln}],
+        })
+    return {"type": "doc", "version": 1, "content": content or [{"type": "paragraph", "content": []}]}
+
+
+def add_worklog(site: str, email: str, api_token: str, key: str, seconds: int, started: dt.datetime, comment: str,
+                timeout: int = 10) -> tuple[dict | None, str | None]:
+    if seconds <= 0:
+        return None, "non_positive_seconds"
+    ctx = ssl.create_default_context()
+    headers = {
+        "Authorization": _auth_header(email, api_token),
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    body = {
+        "timeSpentSeconds": int(seconds),
+        "started": _fmt_started(started),
+        "comment": _to_adf(comment),
+    }
+    url = f"{site.rstrip('/')}/rest/api/3/issue/{key}/worklog"
+    req = Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urlopen(req, timeout=timeout, context=ctx) as resp:
+            data = json.load(resp)
+            return data, None
+    except HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", errors="ignore")
+        except Exception:
+            detail = ""
+        return None, f"{e} {detail}".strip()
+    except URLError as e:
+        return None, f"{e}"
+    except Exception as e:
+        return None, str(e)
+
+
+def add_comment(site: str, email: str, api_token: str, key: str, comment_text: str,
+                timeout: int = 10) -> tuple[dict | None, str | None]:
+    ctx = ssl.create_default_context()
+    headers = {
+        "Authorization": _auth_header(email, api_token),
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    body = {"body": _to_adf(comment_text)}
+    url = f"{site.rstrip('/')}/rest/api/3/issue/{key}/comment"
+    req = Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urlopen(req, timeout=timeout, context=ctx) as resp:
+            data = json.load(resp)
+            return data, None
+    except HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", errors="ignore")
+        except Exception:
+            detail = ""
+        return None, f"{e} {detail}".strip()
+    except URLError as e:
+        return None, f"{e}"
     except Exception as e:
         return None, str(e)
 

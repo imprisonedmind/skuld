@@ -9,7 +9,8 @@ import subprocess
 from .git import get_commits, group_commits_by_issue
 from .util import format_seconds, format_date, format_time
 from .wakatime import load_total_seconds_from_file, fetch_total_seconds, fetch_summary, discover_api_key
-from .jira import search_issues, search_issues_debug, get_myself, search_issues_noassignee, get_my_worklog_seconds
+from .jira import search_issues, search_issues_debug, get_myself, search_issues_noassignee, get_my_worklog_seconds, add_worklog, add_comment
+from .state import seen as state_seen, record as state_record
 
 
 def _default_config_path() -> pathlib.Path:
@@ -608,10 +609,85 @@ def handle_sync(args: argparse.Namespace) -> int:
         print(sep)
         return 0
 
-    # Default: real sync (to be implemented). For safety, we currently noop and print guidance.
-    print("Sync is not yet wired to Jira. Use --test for preview. Next step: implement REST/MCP writers.")
-    print(json.dumps(preview, indent=2, sort_keys=True))
-    return 0
+    # Apply mode: upload Jira worklogs for positive deltas only, idempotently.
+    if not preview.get("ownership_verified"):
+        print("Aborting: Jira ownership verification failed; not uploading.")
+        return 2
+
+    state_path = (cfg.get("state", {}).get("path") if isinstance(cfg.get("state"), dict) else cfg.get("state.path")) or "~/.local/share/skuld/state.json"
+
+    now = dt.datetime.now().astimezone()
+    date_str = format_date(now)
+    time_str = format_time(now)
+
+    uploaded = []
+    skipped = []
+    errors = []
+    # Extract Jira auth once
+    jira_site = (cfg.get("jira") or {}).get("site") if isinstance(cfg.get("jira"), dict) else cfg.get("jira.site")
+    jira_email = (cfg.get("jira") or {}).get("email") if isinstance(cfg.get("jira"), dict) else cfg.get("jira.email")
+    jira_token = (cfg.get("jira") or {}).get("apiToken") if isinstance(cfg.get("jira"), dict) else cfg.get("jira.apiToken")
+
+    for issue in preview["issues"]:
+        seconds = int(issue.get("seconds", 0))
+        delta = int(issue.get("delta", seconds))
+        if delta <= 0:
+            skipped.append({"key": issue["key"], "reason": "no_delta"})
+            continue
+
+        # Idempotency: if we already recorded this exact (issue, window, delta), skip
+        if state_seen(state_path, issue["key"], preview["since"], preview["until"], delta):
+            skipped.append({"key": issue["key"], "reason": "already_recorded"})
+            continue
+
+        # Build comment text per docs/printer.md
+        lines = issue.get("comment", []) or []
+        comment = f"[SKULD] - Adding `{format_seconds(delta)}` on `{date_str}` at `{time_str}`\n"
+        for ln in lines[:5]:
+            comment += f"- {ln}\n"
+
+        data, err = add_worklog(
+            site=jira_site,
+            email=jira_email,
+            api_token=jira_token,
+            key=issue["key"],
+            seconds=delta,
+            started=now,
+            comment=comment,
+        )
+        if err:
+            errors.append({"key": issue["key"], "error": err})
+            continue
+        worklog_id = (data or {}).get("id") if isinstance(data, dict) else None
+        state_record(state_path, issue["key"], preview["since"], preview["until"], delta, worklog_id=str(worklog_id) if worklog_id else None)
+        # Also add an issue comment with the same content
+        cdata, cerr = add_comment(
+            site=jira_site,
+            email=jira_email,
+            api_token=jira_token,
+            key=issue["key"],
+            comment_text=comment,
+        )
+        if cerr:
+            errors.append({"key": issue["key"], "error": f"comment: {cerr}"})
+        comment_id = (cdata or {}).get("id") if isinstance(cdata, dict) else None
+        uploaded.append({"key": issue["key"], "seconds": delta, "worklog_id": worklog_id, "comment_id": comment_id})
+
+    # Summary
+    print("Upload summary:")
+    if uploaded:
+        for u in uploaded:
+            print(f"  + {u['key']}: {format_seconds(u['seconds'])} (worklog {u.get('worklog_id') or '-'}, comment {u.get('comment_id') or '-'})")
+    else:
+        print("  + No uploads (nothing to add)")
+    if skipped:
+        for s in skipped:
+            print(f"  - {s['key']}: skipped ({s['reason']})")
+    if errors:
+        print("Errors:")
+        for e in errors:
+            print(f"  ! {e['key']}: {e['error']}")
+    return 0 if uploaded and not errors else (1 if errors else 0)
 
 
 def build_parser() -> argparse.ArgumentParser:
