@@ -371,37 +371,13 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
             if mapped_project:
                 summary = fetch_summary(api_key, since, until, project=mapped_project)
                 debug_info["wakatime"]["chosen_project"] = mapped_project
+                total_seconds = float(summary.get("total_seconds", 0.0))
+                branch_seconds = dict(summary.get("branches", {}))
+                debug_info["wakatime"]["branches"] = branch_seconds
             else:
-                # Auto-detect project: use repo basename and remote name against summaries' project breakdown
-                base = os.path.basename(os.path.abspath(os.path.expanduser(project)))
-                remote = _git_remote_repo_name(project) or ""
-                summary_all = fetch_summary(api_key, since, until, project=None)
-                projects = summary_all.get("projects", {}) or {}
-                debug_info["wakatime"]["projects"] = projects
-                # Rank candidates by (exact match on base/remote) then by time
-                candidates = []
-                for pname, psecs in projects.items():
-                    score = 0
-                    if pname == base:
-                        score += 2
-                    if remote and pname == remote:
-                        score += 2
-                    # Soft match ignoring separators
-                    def norm(s: str) -> str:
-                        return "".join(ch.lower() for ch in s if ch.isalnum())
-                    if norm(pname) == norm(base) or (remote and norm(pname) == norm(remote)):
-                        score += 1
-                    candidates.append((score, float(psecs or 0.0), pname))
-                candidates.sort(key=lambda t: (t[0], t[1]), reverse=True)
-                chosen = candidates[0][2] if candidates else None
-                debug_info["wakatime"]["chosen_project"] = chosen
-                if chosen:
-                    summary = fetch_summary(api_key, since, until, project=chosen)
-                else:
-                    summary = summary_all
-            total_seconds = float(summary.get("total_seconds", 0.0))
-            branch_seconds = dict(summary.get("branches", {}))
-            debug_info["wakatime"]["branches"] = branch_seconds
+                # No auto-detection: require an explicit per-repo mapping via `skuld add`.
+                debug_info["wakatime"]["chosen_project"] = None
+                debug_info["wakatime"]["note"] = "No repo mapping found; run `skuld add` in this repo."
     # Build allocation strictly from WakaTime branches → issue keys. No fabricated splits.
     import re as _re
     rx = _re.compile(issue_rx)
@@ -540,7 +516,14 @@ def handle_sync(args: argparse.Namespace) -> int:
     if not isinstance(cfg, dict):
         cfg = {}
     period = args.period or "today"
-    preview = _build_preview(period, args.project or os.getcwd(), args.wakatime_file, cfg)
+    # Enforce per-repo mapping when using WakaTime API (no auto-detect across projects)
+    project_path = os.path.abspath(os.path.expanduser(args.project or os.getcwd()))
+    if not args.wakatime_file:
+        mapped = _project_mapping(cfg, project_path)
+        if not mapped:
+            print("This repo is not configured for Skuld.\nRun `skuld add` in this repo to map it to a WakaTime project (and optional Jira key).\nAlternatively, provide `--wakatime-file` for offline preview.")
+            return 2
+    preview = _build_preview(period, project_path, args.wakatime_file, cfg)
 
     if args.test:
         # Printer: follow docs/printer.md formatting

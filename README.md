@@ -23,13 +23,14 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 - Configure your credentials:
   - `skuld start`
   - Provide Jira site/email/token and WakaTime API key (auto‑discovered from `~/.wakatime.cfg` when possible).
-- (Recommended) Map each repo → WakaTime project:
-  - From inside a repo: `skuld add`
-  - Stores the mapping in `~/.skuld.yaml` for faster, more accurate attribution.
+- Map each repo → WakaTime project (required for `sync`):
+  - From inside the repo you will sync: `skuld add`
+  - This stores a per‑repo mapping in `~/.skuld.yaml` and is required so `sync` only uses time from the current repo’s WakaTime project.
 
 ## Use (global commands)
 - Preview (no writes):
   - Run inside the repo: `skuld sync week --test`
+  - If the repo is not mapped yet, the command will exit and prompt you to run `skuld add` here first.
   - Also supports `today` and `yesterday`.
 - Upload (writes to Jira):
   - `skuld sync week`
