@@ -47,6 +47,47 @@ def get_commits(repo: str, since_iso: str, until_iso: str) -> List[Commit]:
     return commits
 
 
+def get_commits_for_branches(repo: str, branches: List[str], since_iso: str, until_iso: str) -> List[Commit]:
+    """Return commits reachable from any of the given local branches within the window.
+
+    Runs one log per branch to tolerate missing refs. Dedupe by SHA.
+    """
+    if not branches:
+        return []
+    fmt = "%H\x1f%ad\x1f%s\x1e"
+    seen: Dict[str, bool] = {}
+    out_commits: List[Commit] = []
+    # Use unique branches to avoid redundant work
+    uniq = [b for i, b in enumerate(branches) if b and b not in branches[:i]]
+    for br in uniq:
+        cmd = [
+            "git",
+            "-C",
+            repo,
+            "log",
+            br,
+            f"--since={since_iso}",
+            f"--until={until_iso}",
+            "--date=iso-strict",
+            f"--pretty=format:{fmt}",
+        ]
+        out = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if out.returncode != 0 or not out.stdout:
+            continue
+        records = out.stdout.strip("\n\x1e").split("\x1e") if out.stdout else []
+        for rec in records:
+            if not rec:
+                continue
+            parts = rec.split("\x1f")
+            if len(parts) != 3:
+                continue
+            sha, date, subject = parts
+            if sha in seen:
+                continue
+            seen[sha] = True
+            out_commits.append(Commit(sha=sha, date=date, subject=subject))
+    return out_commits
+
 def group_commits_by_issue(commits: List[Commit], pattern: str) -> Dict[str, List[Commit]]:
     groups: Dict[str, List[Commit]] = {}
     for c in commits:
@@ -56,4 +97,3 @@ def group_commits_by_issue(commits: List[Commit], pattern: str) -> Dict[str, Lis
         for k in keys:
             groups.setdefault(k, []).append(c)
     return groups
-

@@ -6,7 +6,7 @@ import pathlib
 from typing import Any, Dict, List, Tuple
 import subprocess
 
-from .git import get_commits, group_commits_by_issue
+from .git import get_commits, group_commits_by_issue, get_commits_for_branches
 from .util import format_seconds, format_date, format_time
 from .wakatime import load_total_seconds_from_file, fetch_total_seconds, fetch_summary, discover_api_key
 from .jira import search_issues, search_issues_debug, get_myself, search_issues_noassignee, get_my_worklog_seconds, add_worklog, add_comment
@@ -292,6 +292,30 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
     commits = get_commits(project, since, until)
     groups = group_commits_by_issue(commits, issue_rx)
 
+    # Determine last recorded upload window per issue (from local state) to bound comment commits.
+    state_path = (cfg.get("state", {}).get("path") if isinstance(cfg.get("state"), dict) else cfg.get("state.path")) or "~/.local/share/skuld/state.json"
+    last_until_by_issue: Dict[str, str] = {}
+    try:
+        p = pathlib.Path(os.path.expanduser(state_path)).resolve()
+        if p.exists():
+            data = json.loads(p.read_text(encoding="utf-8"))
+            entries = data.get("entries") if isinstance(data, dict) else None
+            if isinstance(entries, list):
+                for e in entries:
+                    if not isinstance(e, dict):
+                        continue
+                    key = e.get("issue")
+                    u = e.get("until")
+                    if not key or not u:
+                        continue
+                    # Track the max until per issue
+                    prev = last_until_by_issue.get(key)
+                    if not prev or (str(u) > str(prev)):
+                        last_until_by_issue[key] = str(u)
+    except Exception:
+        # If state cannot be read, proceed without additional bounding
+        last_until_by_issue = {}
+
     # If Jira credentials exist, fetch summaries and filter to current user's assignments.
     jira_email = (jira.get("email") if isinstance(jira, dict) else cfg.get("jira.email")) or ""
     jira_token = (jira.get("apiToken") if isinstance(jira, dict) else cfg.get("jira.apiToken")) or ""
@@ -357,6 +381,7 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
     # Pull WakaTime: prefer explicit JSON file; else try API if key configured
     total_seconds = 0.0
     branch_seconds: Dict[str, float] = {}
+    branches_by_key: Dict[str, List[str]] = {}
     if wakatime_file:
         total_seconds = load_total_seconds_from_file(wakatime_file)
     else:
@@ -382,8 +407,12 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
     rx = _re.compile(issue_rx)
     alloc_by_key: Dict[str, float] = {}
     for bname, secs in (branch_seconds or {}).items():
-        for m in rx.findall(bname or ""):
+        matches = rx.findall(bname or "")
+        if not matches:
+            continue
+        for m in matches:
             alloc_by_key[m] = alloc_by_key.get(m, 0.0) + float(secs or 0.0)
+            branches_by_key.setdefault(m, []).append(bname)
             candidate_keys.add(m)
     debug_info["keys"]["candidate"] = sorted(list(candidate_keys))
     debug_info["keys"]["from_branches"] = sorted(list(alloc_by_key.keys()))
@@ -407,6 +436,38 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
         if ownership_verified and key not in jira_info:
             continue
         items = groups.get(key, [])
+        # Also pull commits that are on any WakaTime-observed branches matching this key
+        branch_list = branches_by_key.get(key, [])
+        if branch_list:
+            try:
+                bcommits = get_commits_for_branches(project, branch_list, since, until)
+                if bcommits:
+                    # Merge with items (dedupe by sha)
+                    have = {c.sha for c in items}
+                    for c in bcommits:
+                        if c.sha not in have:
+                            items.append(c)
+                            have.add(c.sha)
+            except Exception:
+                pass
+        # Filter commit items to only those after the last recorded upload for this issue (if any)
+        last_u = last_until_by_issue.get(key)
+        if last_u:
+            try:
+                # Dates are ISO 8601 strings; safe to compare as datetimes
+                last_dt = dt.datetime.fromisoformat(last_u)
+                filt: List[Any] = []
+                for c in items:
+                    try:
+                        cd = dt.datetime.fromisoformat(c.date)
+                        if cd > last_dt:
+                            filt.append(c)
+                    except Exception:
+                        # If parsing fails, keep the commit (avoid hiding data)
+                        filt.append(c)
+                items = filt
+            except Exception:
+                pass
         seconds = alloc_by_key.get(key, 0.0)
         if seconds <= 0:
             continue  # Skip keys without WakaTime-backed time
