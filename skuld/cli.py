@@ -9,7 +9,17 @@ import subprocess
 from .git import get_commits, group_commits_by_issue, get_commits_for_branches
 from .util import format_seconds, format_date, format_time
 from .wakatime import load_total_seconds_from_file, fetch_total_seconds, fetch_summary, discover_api_key
-from .jira import search_issues, search_issues_debug, get_myself, search_issues_noassignee, get_my_worklog_seconds, add_worklog, add_comment
+from .jira import (
+    search_issues,
+    search_issues_debug,
+    get_myself,
+    search_issues_noassignee,
+    get_my_worklog_seconds,
+    add_worklog,
+    add_comment,
+    ensure_in_progress,
+    get_issue_status,
+)
 from .state import seen as state_seen, record as state_record
 
 
@@ -454,13 +464,19 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
         last_u = last_until_by_issue.get(key)
         if last_u:
             try:
-                # Dates are ISO 8601 strings; safe to compare as datetimes
+                # Normalize to timezone-aware UTC for robust comparison
                 last_dt = dt.datetime.fromisoformat(last_u)
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=dt.datetime.now().astimezone().tzinfo)
+                last_utc = last_dt.astimezone(dt.timezone.utc)
                 filt: List[Any] = []
                 for c in items:
                     try:
                         cd = dt.datetime.fromisoformat(c.date)
-                        if cd > last_dt:
+                        if cd.tzinfo is None:
+                            cd = cd.replace(tzinfo=dt.datetime.now().astimezone().tzinfo)
+                        cd_utc = cd.astimezone(dt.timezone.utc)
+                        if cd_utc > last_utc:
                             filt.append(c)
                     except Exception:
                         # If parsing fails, keep the commit (avoid hiding data)
@@ -489,6 +505,14 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
                 seen.add(subj)
             if len(comment_lines) >= 5:
                 break
+        # Fetch current status (best-effort) for preview/debug
+        status_name = None
+        if jira_site and jira_email and jira_token:
+            try:
+                status_name, _se = get_issue_status(jira_site, jira_email, jira_token, key)
+            except Exception:
+                status_name = None
+
         issues.append({
             "key": key,
             "url": url,
@@ -498,6 +522,7 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
             "delta": delta,
             "comment": comment_lines,
             "commits": [c.sha for c in items],
+            "status": status_name,
         })
 
     notes: List[str] = []
@@ -626,6 +651,10 @@ def handle_sync(args: argparse.Namespace) -> int:
             print(sep)
             print(f"Issue: {issue['key']}")
             print(f"Name:  {name or ''}")
+            status = (issue.get("status") or "Unknown").strip()
+            print(f"Status: {status}")
+            if status.lower() in ("to do", "todo"):
+                print("Next: Will transition to 'In Progress' on upload.")
             print(f"Time to add:  {format_seconds(delta)}")
             print(f"Total Time: {format_seconds(seconds)}")
             if already:
@@ -676,6 +705,22 @@ def handle_sync(args: argparse.Namespace) -> int:
         comment = f"[SKULD] - Adding `{format_seconds(delta)}` on `{date_str}` at `{time_str}`\n"
         for ln in lines[:5]:
             comment += f"- {ln}\n"
+
+        # If issue is in "To Do", attempt to move it to "In Progress" before logging time
+        try:
+            changed, new_status, terr = ensure_in_progress(
+                site=jira_site,
+                email=jira_email,
+                api_token=jira_token,
+                key=issue["key"],
+            )
+            if terr:
+                print(f"Note: could not transition {issue['key']} to 'In Progress': {terr}")
+            elif changed:
+                print(f"Transitioned {issue['key']} → {new_status or 'In Progress'}")
+        except Exception:
+            # Best-effort; ignore transition failures
+            pass
 
         data, err = add_worklog(
             site=jira_site,

@@ -1,6 +1,6 @@
 import base64
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -198,6 +198,114 @@ def get_issue(site: str, email: str, api_token: str, key: str, timeout: int = 10
             }, None
     except Exception as e:
         return None, str(e)
+
+
+def get_issue_status(site: str, email: str, api_token: str, key: str, timeout: int = 10) -> Tuple[Optional[str], Optional[str]]:
+    """Return the current status name of an issue (e.g., "To Do", "In Progress")."""
+    ctx = ssl.create_default_context()
+    headers = {
+        "Authorization": _auth_header(email, api_token),
+        "Accept": "application/json",
+    }
+    url = f"{site.rstrip('/')}/rest/api/3/issue/{key}?fields=status"
+    req = Request(url, headers=headers, method="GET")
+    try:
+        with urlopen(req, timeout=timeout, context=ctx) as resp:
+            data = json.load(resp)
+            fields = data.get("fields") or {}
+            status = fields.get("status") or {}
+            name = status.get("name")
+            return name, None
+    except Exception as e:
+        return None, str(e)
+
+
+def list_transitions(site: str, email: str, api_token: str, key: str, timeout: int = 10) -> Tuple[Optional[List[Dict]], Optional[str]]:
+    """List available transitions for an issue (id + name)."""
+    ctx = ssl.create_default_context()
+    headers = {
+        "Authorization": _auth_header(email, api_token),
+        "Accept": "application/json",
+    }
+    url = f"{site.rstrip('/')}/rest/api/3/issue/{key}/transitions"
+    req = Request(url, headers=headers, method="GET")
+    try:
+        with urlopen(req, timeout=timeout, context=ctx) as resp:
+            data = json.load(resp)
+            return data.get("transitions") or [], None
+    except Exception as e:
+        return None, str(e)
+
+
+def transition_issue(site: str, email: str, api_token: str, key: str, transition_id: str, timeout: int = 10) -> Tuple[Optional[dict], Optional[str]]:
+    """Perform a transition by id."""
+    ctx = ssl.create_default_context()
+    headers = {
+        "Authorization": _auth_header(email, api_token),
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    body = {"transition": {"id": transition_id}}
+    url = f"{site.rstrip('/')}/rest/api/3/issue/{key}/transitions"
+    req = Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urlopen(req, timeout=timeout, context=ctx) as resp:
+            # Some Jira setups return 204 No Content; handle gracefully
+            try:
+                data = json.load(resp)
+            except Exception:
+                data = {"ok": True}
+            return data, None
+    except HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", errors="ignore")
+        except Exception:
+            detail = ""
+        return None, f"{e} {detail}".strip()
+    except URLError as e:
+        return None, f"{e}"
+    except Exception as e:
+        return None, str(e)
+
+
+def ensure_in_progress(site: str, email: str, api_token: str, key: str, timeout: int = 10) -> Tuple[bool, Optional[str], Optional[str]]:
+    """If issue is in a "To Do" state, attempt transition to "In Progress".
+    Returns (changed, new_status, error).
+    """
+    status, err = get_issue_status(site, email, api_token, key, timeout=timeout)
+    if err:
+        return False, None, err
+    if not status:
+        return False, None, None
+    st = (status or "").strip().lower()
+    if st not in ("to do", "todo"):
+        return False, status, None
+    transitions, terr = list_transitions(site, email, api_token, key, timeout=timeout)
+    if terr or transitions is None:
+        return False, status, terr
+    # Find a transition to "In Progress" or commonly named actions
+    wanted = {"in progress", "start progress", "start work"}
+    trans_id = None
+    for t in transitions:
+        name = (t.get("name") or "").strip().lower()
+        if name in wanted:
+            trans_id = t.get("id")
+            break
+    if not trans_id:
+        # Heuristic: look for a transition whose target status is In Progress
+        for t in transitions:
+            to_status = (((t.get("to") or {}).get("name")) or "").strip().lower()
+            if to_status == "in progress":
+                trans_id = t.get("id")
+                break
+    if not trans_id:
+        return False, status, None
+    _, perr = transition_issue(site, email, api_token, key, trans_id, timeout=timeout)
+    if perr:
+        return False, status, perr
+    # Re-fetch status to report
+    new_status, _ = get_issue_status(site, email, api_token, key, timeout=timeout)
+    return True, new_status or "In Progress", None
 
 
 def _fmt_started(dtobj: dt.datetime) -> str:

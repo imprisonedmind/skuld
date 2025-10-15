@@ -20,7 +20,8 @@ def extract_issue_keys(text: str, pattern: str) -> List[str]:
 
 
 def get_commits(repo: str, since_iso: str, until_iso: str) -> List[Commit]:
-    fmt = "%H\x1f%ad\x1f%s\x1e"
+    # Use %aI (author date, strict ISO 8601 with timezone offset like +00:00)
+    fmt = "%H\x1f%aI\x1f%s\x1e"
     cmd = [
         "git",
         "-C",
@@ -28,7 +29,6 @@ def get_commits(repo: str, since_iso: str, until_iso: str) -> List[Commit]:
         "log",
         f"--since={since_iso}",
         f"--until={until_iso}",
-        "--date=iso-strict",
         f"--pretty=format:{fmt}",
     ]
     out = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -54,7 +54,8 @@ def get_commits_for_branches(repo: str, branches: List[str], since_iso: str, unt
     """
     if not branches:
         return []
-    fmt = "%H\x1f%ad\x1f%s\x1e"
+    # Use %aI for strict ISO timestamps
+    fmt = "%H\x1f%aI\x1f%s\x1e"
     seen: Dict[str, bool] = {}
     out_commits: List[Commit] = []
     # Use unique branches to avoid redundant work
@@ -68,7 +69,6 @@ def get_commits_for_branches(repo: str, branches: List[str], since_iso: str, unt
             br,
             f"--since={since_iso}",
             f"--until={until_iso}",
-            "--date=iso-strict",
             f"--pretty=format:{fmt}",
         ]
         out = subprocess.run(cmd, capture_output=True, text=True, check=False)
