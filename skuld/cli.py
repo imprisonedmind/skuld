@@ -706,7 +706,10 @@ def handle_sync(args: argparse.Namespace) -> int:
         for ln in lines[:5]:
             comment += f"- {ln}\n"
 
-        # If issue is in "To Do", attempt to move it to "In Progress" before logging time
+        # If issue is in "To Do", attempt to move it to "In Progress" before logging time.
+        # When a status transition occurs, append a note to the comment like:
+        # "Updating status from XYZ to ABC".
+        prior_status = (issue.get("status") or "").strip() or None
         try:
             changed, new_status, terr = ensure_in_progress(
                 site=jira_site,
@@ -718,6 +721,10 @@ def handle_sync(args: argparse.Namespace) -> int:
                 print(f"Note: could not transition {issue['key']} to 'In Progress': {terr}")
             elif changed:
                 print(f"Transitioned {issue['key']} → {new_status or 'In Progress'}")
+                # Append explicit status update note to both worklog and issue comments
+                if prior_status:
+                    ns = (new_status or 'In Progress')
+                    comment += f"Updating status from {prior_status} to {ns}\n"
         except Exception:
             # Best-effort; ignore transition failures
             pass
