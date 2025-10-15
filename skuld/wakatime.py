@@ -144,6 +144,84 @@ def fetch_summary(api_key: str, since_iso: str, until_iso: str, project: Optiona
     return out
 
 
+def fetch_durations_summary(api_key: str, since_iso: str, until_iso: str, project: Optional[str] = None, timeout: int = 10) -> Dict[str, Any]:
+    """
+    Aggregate per-branch seconds using WakaTime Durations API for the window [since, until].
+    Returns { "total_seconds": float, "branches": { name: seconds } }
+    Falls back to empty values on any error.
+    """
+    out: Dict[str, Any] = {"total_seconds": 0.0, "branches": {}}
+    if not api_key:
+        return out
+    # Normalize window bounds
+    try:
+        import datetime as dt
+        since_dt = dt.datetime.fromisoformat(since_iso)
+        until_dt = dt.datetime.fromisoformat(until_iso)
+    except Exception:
+        return out
+    # Ensure timezone-aware for comparisons; assume local if missing
+    local_tz = dt.datetime.now().astimezone().tzinfo
+    if since_dt.tzinfo is None:
+        since_dt = since_dt.replace(tzinfo=local_tz)
+    if until_dt.tzinfo is None:
+        until_dt = until_dt.replace(tzinfo=local_tz)
+    # Convert to POSIX for filtering
+    since_ts = since_dt.timestamp()
+    until_ts = until_dt.timestamp()
+
+    total = 0.0
+    branches: Dict[str, float] = {}
+
+    # Iterate per-day to query durations (API is day-scoped)
+    day = since_dt.date()
+    end_day = until_dt.date()
+    ctx = ssl.create_default_context()
+    while day <= end_day:
+        params = {
+            "date": day.isoformat(),
+            "api_key": api_key,
+        }
+        if project:
+            params["project"] = project
+        url = f"https://wakatime.com/api/v1/users/current/durations?{urlencode(params)}"
+        try:
+            req = Request(url)
+            with urlopen(req, timeout=timeout, context=ctx) as resp:
+                data = json.load(resp)
+        except Exception:
+            day = day.fromordinal(day.toordinal() + 1)
+            continue
+        # Expect list or dict with "data" list
+        records = []
+        if isinstance(data, list):
+            records = data
+        elif isinstance(data, dict) and isinstance(data.get("data"), list):
+            records = data.get("data") or []
+        for rec in records:
+            try:
+                dur = float(rec.get("duration") or rec.get("seconds") or 0.0)
+            except Exception:
+                dur = 0.0
+            if dur <= 0:
+                continue
+            # rec["time"] is a unix epoch seconds, rec["branch"] may be present
+            try:
+                ts = float(rec.get("time") or 0.0)
+            except Exception:
+                ts = 0.0
+            if ts <= 0.0 or ts < since_ts or ts > until_ts:
+                continue
+            bname = rec.get("branch") or ""
+            total += dur
+            if bname:
+                branches[bname] = branches.get(bname, 0.0) + dur
+        day = day.fromordinal(day.toordinal() + 1)
+    out["total_seconds"] = float(total)
+    out["branches"] = branches
+    return out
+
+
 def discover_api_key() -> Optional[str]:
     """Attempt to locate a local WakaTime API key from ~/.wakatime.cfg."""
     cfg_path = Path("~/.wakatime.cfg").expanduser()

@@ -8,7 +8,7 @@ import subprocess
 
 from .git import get_commits, group_commits_by_issue, get_commits_for_branches
 from .util import format_seconds, format_date, format_time
-from .wakatime import load_total_seconds_from_file, fetch_total_seconds, fetch_summary, discover_api_key
+from .wakatime import load_total_seconds_from_file, fetch_total_seconds, fetch_summary, fetch_durations_summary, discover_api_key
 from .jira import (
     search_issues,
     search_issues_debug,
@@ -403,7 +403,14 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
             debug_info["wakatime"]["api_key_source"] = "config" if (wk.get("apiKey") if isinstance(wk, dict) else cfg.get("wakatime.apiKey")) else "wakatime.cfg"
             mapped_project = _project_mapping(cfg, project)
             if mapped_project:
-                summary = fetch_summary(api_key, since, until, project=mapped_project)
+                # For short windows, use WakaTime Durations for precise slicing; else Summaries
+                use_durations = period.lower() in ("today", "yesterday", "24h", "24hours", "24", "day")
+                if use_durations:
+                    summary = fetch_durations_summary(api_key, since, until, project=mapped_project)
+                    debug_info["wakatime"]["api"] = "durations"
+                else:
+                    summary = fetch_summary(api_key, since, until, project=mapped_project)
+                    debug_info["wakatime"]["api"] = "summaries"
                 debug_info["wakatime"]["chosen_project"] = mapped_project
                 total_seconds = float(summary.get("total_seconds", 0.0))
                 branch_seconds = dict(summary.get("branches", {}))
@@ -512,6 +519,14 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
                 status_name, _se = get_issue_status(jira_site, jira_email, jira_token, key)
             except Exception:
                 status_name = None
+        # Track last commit time for startedPolicy=lastCommit
+        last_commit_iso = None
+        for c in items:
+            try:
+                if last_commit_iso is None or c.date > last_commit_iso:
+                    last_commit_iso = c.date
+            except Exception:
+                pass
 
         issues.append({
             "key": key,
@@ -523,6 +538,7 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
             "comment": comment_lines,
             "commits": [c.sha for c in items],
             "status": status_name,
+            "last_commit": last_commit_iso,
         })
 
     notes: List[str] = []
@@ -676,9 +692,47 @@ def handle_sync(args: argparse.Namespace) -> int:
 
     state_path = (cfg.get("state", {}).get("path") if isinstance(cfg.get("state"), dict) else cfg.get("state.path")) or "~/.local/share/skuld/state.json"
 
+    # Resolve worklog start timestamp policy
     now = dt.datetime.now().astimezone()
     date_str = format_date(now)
     time_str = format_time(now)
+    time_cfg = cfg.get("time") if isinstance(cfg.get("time"), dict) else {}
+    started_policy = (time_cfg.get("startedPolicy") if isinstance(time_cfg, dict) else cfg.get("time.startedPolicy")) or "now"
+    started_policy = str(started_policy).strip().lower()
+    fixed_hhmm = (time_cfg.get("startedFixedTime") if isinstance(time_cfg, dict) else cfg.get("time.startedFixedTime")) or None
+
+    def _resolve_started(issue_obj: Dict[str, Any]) -> dt.datetime:
+        pol = started_policy
+        if pol == "periodend":
+            try:
+                u = dt.datetime.fromisoformat(preview["until"])
+                if u.tzinfo is None:
+                    u = u.replace(tzinfo=now.tzinfo)
+                return u.astimezone(now.tzinfo)
+            except Exception:
+                return now
+        if pol == "lastcommit":
+            s = issue_obj.get("last_commit")
+            if s:
+                try:
+                    lc = dt.datetime.fromisoformat(s)
+                    if lc.tzinfo is None:
+                        lc = lc.replace(tzinfo=now.tzinfo)
+                    return lc.astimezone(now.tzinfo)
+                except Exception:
+                    pass
+            return now
+        if pol == "fixed" and fixed_hhmm:
+            try:
+                hh, mm = [int(x) for x in str(fixed_hhmm).split(":", 1)]
+                u = dt.datetime.fromisoformat(preview["until"])  # date anchor
+                if u.tzinfo is None:
+                    u = u.replace(tzinfo=now.tzinfo)
+                return u.replace(hour=hh, minute=mm, second=0, microsecond=0).astimezone(now.tzinfo)
+            except Exception:
+                return now
+        # default "now"
+        return now
 
     uploaded = []
     skipped = []
@@ -729,13 +783,14 @@ def handle_sync(args: argparse.Namespace) -> int:
             # Best-effort; ignore transition failures
             pass
 
+        started_dt = _resolve_started(issue)
         data, err = add_worklog(
             site=jira_site,
             email=jira_email,
             api_token=jira_token,
             key=issue["key"],
             seconds=delta,
-            started=now,
+            started=started_dt,
             comment=comment,
         )
         if err:

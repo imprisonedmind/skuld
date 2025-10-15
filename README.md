@@ -73,9 +73,5 @@ state:
   path: ~/.local/share/skuld/state.json
 ```
 
-## Notes
-- Today uses daily totals from WakaTime; for precise partial‑day slicing we can add “Durations” later.
-- Worklog `started` is set to “now” by default; we can adjust policy if you prefer.
-
 ## License
-TBD
+MIT — see `skuld-cli/LICENSE`.
