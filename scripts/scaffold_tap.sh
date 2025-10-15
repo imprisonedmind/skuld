@@ -32,14 +32,14 @@ fi
 cat >> "$TAP_DIR/Formula/skuld.rb" <<'RUBY'
   head "https://github.com/imprisonedmind/skuld.git", branch: "main"
 
-  depends_on "python@3.11"
+  depends_on "python"
 
   def install
     libexec.install Dir["skuld", "docs", ".skuld.yaml.example", "README.md", "LICENSE"]
     (bin/"skuld").write <<~EOS
       #!/bin/bash
       export PYTHONPATH="#{libexec}"
-      exec "#{Formula["python@3.11"].opt_bin}/python3" -m skuld.cli "$@"
+      exec "#{Formula["python"].opt_bin}/python3" -m skuld.cli "$@"
     EOS
     (bin/"skuld").chmod 0755
   end
@@ -62,4 +62,3 @@ echo "1) Create GitHub repo: https://github.com/new (owner: $OWNER, name: $NAME)
 echo "2) cd $TAP_DIR && git remote add origin https://github.com/$OWNER/$NAME.git && git branch -M main && git push -u origin main"
 echo "3) On client machines: brew tap $OWNER/skuld && brew install skuld"
 popd >/dev/null
-
