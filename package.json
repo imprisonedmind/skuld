@@ -2,6 +2,17 @@
   "name": "skuld-cli",
   "version": "0.1.11",
   "description": "Skuld: WakaTime + Git → Jira worklogs",
+  "keywords": [
+    "skuld",
+    "jira",
+    "atlassian",
+    "worklog",
+    "wakatime",
+    "time-tracking",
+    "cli",
+    "developer-tools",
+    "productivity"
+  ],
   "bin": {
     "skuld": "bin/skuld.js"
   },
