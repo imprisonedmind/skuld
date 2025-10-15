@@ -32,11 +32,13 @@ Skuld is a local CLI that correlates your development activity (WakaTime + Git) 
 - pipx (recommended):
   - `pipx install .` (from this repo) or package when published.
   - Then run `skuld ...` via the pipx shim if configured as a console script, or use `python -m skuld.cli`.
-- npm (wrapper):
+- Homebrew (HEAD install from this repo):
+  - `brew install --HEAD https://raw.githubusercontent.com/imprisonedmind/skuld/main/Formula/skuld.rb`
+  - Then run `skuld add` / `skuld sync` from any repo (uses CWD by default).
+  - For a stable release, tag the repo (e.g., v0.1.0) and update the formula with `url` + `sha256`.
+- npm (optional wrapper):
   - `npm install -g skuld-cli` (when published), or from this repo: `npm link`.
-  - Then run `skuld ...` — the wrapper calls `python -m skuld.cli`.
-- Homebrew:
-  - Create a formula that installs the npm wrapper or a Python shim; see docs/skuld-plan.md Distribution.
+  - Then run `skuld ...` — wrapper calls `python -m skuld.cli`.
 
 ## Behavior and Rules
 - Attribution
