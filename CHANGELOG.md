@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.1.11
+- Docs: update README install sections (macOS via Homebrew, Linux via npm) and troubleshooting; no code changes.
+
 ## v0.1.10
 - Release: script now publishes to npm by default alongside Homebrew tap update (set `SKULD_NPM_PUBLISH=0` to skip).
 - Node shim: set `PYTHONPATH` for cross‑platform (Linux) installs via npm.
