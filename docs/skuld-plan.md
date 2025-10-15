@@ -1,10 +1,10 @@
-# skuld: Automatic Jira Time Logging from WakaTime + Git (via Atlassian MCP)
+# skuld: Automatic Jira Time Logging from WakaTime + Git
 
 This document proposes a small, local tool that correlates your development activity (WakaTime + Git) to Jira tickets and updates them with time spent and a concise work description. It aims to be simple, private-by-default, and reliably idempotent.
 
 ## Decisions
 - Trigger: CLI-first (manual) with simple subcommands; optional git hook remains as an add-on.
-- Backend: MCP-first (use Atlassian Remote MCP Server tools); Jira REST remains a fallback.
+- Backend: Jira REST API only.
 - Minimum log unit: match WakaTime (exact parity). Reconcile Jira worklogs to equal WakaTime totals for the period.
 
 ## Goals
@@ -37,12 +37,12 @@ This document proposes a small, local tool that correlates your development acti
 - Optional: IDE integration that calls the CLI.
 
 ## Data Flow
-1. Read config (`~/.skuld.yaml`; fallback `~/.time-time.yaml`): Jira site/token, MCP config, regex for issue keys, project mappings, timezone.
+1. Read config (`~/.skuld.yaml`; fallback `~/.time-time.yaml`): Jira site/token, regex for issue keys, project mappings, timezone.
 2. Pull WakaTime data for the time window (API summaries or local cache) → durations by project/branch.
 3. Pull Git data: commits, branches, timestamps; extract issue keys via regex.
 4. Correlate: assign durations to issues with heuristics (below) and produce candidate worklogs.
 5. Reconcile with local state DB to avoid duplicate logging.
-6. Write to Jira via MCP server (preferred) or REST fallback; record results in state DB. Ensure totals logged to Jira equal WakaTime totals for the window (reconciliation step).
+6. Write to Jira via REST; record results in state DB. Ensure totals logged to Jira equal WakaTime totals for the window (reconciliation step).
 
 ## Matching Strategy (Heuristics)
 - Ticket key regex: `[A-Z][A-Z0-9]+-\d+` (configurable).
@@ -58,32 +58,13 @@ This document proposes a small, local tool that correlates your development acti
   - Use top N commit subjects in the period, dedupe similar lines, and include branch name.
   - Prefer concise language, e.g., “Updated auth flow; added tests (#a1b2c3)”
 
-## LLM-Assisted Attribution
-When multiple related issues (parent/child) exist, use an LLM to improve allocation across subtasks.
+## Attribution
+Strictly from WakaTime branch names with issue keys. If no match, no allocation.
 
-- Inputs to the model:
-  - Recent commit subjects/bodies and diffs (size-capped), branch names, PR title (if present).
-  - Candidate issues from Jira (parent and children): keys, titles, descriptions, and optionally recent comments.
-  - WakaTime project/branch time slices for the period.
-- Task:
-  - Classify each commit (or time slice) to the most relevant issue among the candidates.
-  - Produce allocation weights across issues and a short rationale.
-  - Generate a compact worklog comment per issue using the classified commits.
-- Guardrails:
-  - Hard-cap tokens by sampling only recent N commits and truncating diffs.
-  - If confidence is low or no clear child matches, fall back to logging on the parent/main ticket.
-  - Keep a dry-run preview of allocations and comments.
-- Implementation:
-  - Use MCP-first to call an LLM tool with a constrained prompt. If MCP LLM is unavailable, use any configured LLM provider or heuristics-only fallback.
-
-## Jira/MCP Integration
-- Preferred: Atlassian Remote MCP Server
-  - Configure a local MCP client to call Jira tools exposed by Atlassian’s MCP server (e.g., list issues, add worklog, add comment).
-  - Pros: tighter alignment with Atlassian’s ecosystem; future-proof with agentic workflows.
-  - Cons: adds a dependency on MCP runtime/config.
-- Fallback: Jira REST API
-  - POST `/rest/api/3/issue/{issueIdOrKey}/worklog` with `timeSpentSeconds` and `started`.
-  - Add comment via `/rest/api/3/issue/{issueIdOrKey}/comment` (or embed in worklog comment field if desired).
+## Jira Integration
+- REST API only:
+  - POST `/rest/api/3/issue/{issueIdOrKey}/worklog` with `timeSpentSeconds`, `started`, and ADF comment.
+  - POST `/rest/api/3/issue/{issueIdOrKey}/comment` with ADF body.
 
 ### MCP vs REST (Practical Notes)
 - Core capability does not require MCP; Jira REST alone is sufficient.
@@ -126,24 +107,21 @@ When multiple related issues (parent/child) exist, use an LLM to improve allocat
 2) WakaTime summaries pull (period) by project/branch
 3) Git scan (period): commits, branch; extract ticket keys
 4) Correlate → candidate worklogs (console table)
-5) MCP-first write to Jira (behind `--apply`) + state DB for idempotency
-6) Optional LLM classification: refine allocations across parent/child issues
-7) Reconciliation pass to ensure Jira totals match WakaTime
-8) Optional commit hook sample (value-add)
+5) REST write to Jira (apply) + state DB for idempotency
+6) Reconciliation pass to ensure Jira totals match WakaTime
+7) Optional commit hook sample (value-add)
 
-## CLI Usage (Proposed)
-- `skuld start` → interactive prompts for WakaTime API key, Jira site/email/token, MCP endpoint/auth. Writes `~/.skuld.yaml`.
+- `skuld start` → interactive prompts for WakaTime API key, Jira site/email/token. Writes `~/.skuld.yaml`.
 - `skuld sync today` → analyze last 12 hours or start-of-day, reconcile to WakaTime, then apply.
 - `skuld sync yesterday` → analyze yesterday.
 - `skuld sync week` → analyze from start of week to now.
 - `skuld sync --test` → dry-run preview: tickets, links, times, and draft comments.
-- Flags: `--use-rest`, `--project <path>`, `--wakatime-file <path>`.
+- Flags: `--project <path>`, `--wakatime-file <path>`.
 
 ## Distribution
-- Homebrew: create a tap with a Formula that installs a Python/bun-built binary or shims a `pipx` install.
-- npm/bun: publish as an npm package with a `bin` entry (`skuld`), targeting Node 18+; or ship a bun-native script.
-- Python: `pipx install skuld` (optional), ship console_scripts entry.
-Note: keep runtime deps minimal to ease cross-platform installs.
+- Python/pipx: provide console entry or `python -m skuld.cli`.
+- npm: ship a small Node wrapper calling `python -m skuld.cli`.
+- Homebrew: provide a formula that installs the wrapper.
 
 ## Pseudocode Sketch
 ```bash

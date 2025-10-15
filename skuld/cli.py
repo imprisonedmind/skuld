@@ -510,8 +510,6 @@ def handle_start(args: argparse.Namespace) -> int:
     jira_site = input("Jira site (https://your-org.atlassian.net): ").strip() or _dget(existing, ["jira", "site"]) or existing.get("jira.site", "")
     jira_email = input("Jira email: ").strip() or _dget(existing, ["jira", "email"]) or existing.get("jira.email", "")
     jira_token = input("Jira API token: ").strip() or _dget(existing, ["jira", "apiToken"]) or existing.get("jira.apiToken", "")
-    mcp_endpoint = input("MCP endpoint (optional): ").strip() or _dget(existing, ["mcp", "endpoint"]) or existing.get("mcp.endpoint", "")
-    mcp_auth = input("MCP auth (optional): ").strip() or _dget(existing, ["mcp", "auth"]) or existing.get("mcp.auth", "")
 
     # Merge fields back into config and save
     cfg = existing.copy()
@@ -520,13 +518,6 @@ def handle_start(args: argparse.Namespace) -> int:
     cfg["jira"]["site"] = jira_site
     cfg["jira"]["email"] = jira_email
     cfg["jira"]["apiToken"] = jira_token
-    if mcp_endpoint or mcp_auth:
-        if not isinstance(cfg.get("mcp"), dict):
-            cfg["mcp"] = {}
-        if mcp_endpoint:
-            cfg["mcp"]["endpoint"] = mcp_endpoint
-        if mcp_auth:
-            cfg["mcp"]["auth"] = mcp_auth
     if not isinstance(cfg.get("regex"), dict):
         cfg["regex"] = {"issueKey": "[A-Z][A-Z0-9]+-\\d+"}
     if not isinstance(cfg.get("time"), dict):
@@ -534,9 +525,7 @@ def handle_start(args: argparse.Namespace) -> int:
     if not isinstance(cfg.get("comment"), dict):
         cfg["comment"] = {"maxLines": 5, "includeCommitHashes": True}
     if not isinstance(cfg.get("state"), dict):
-        cfg["state"] = {"path": "~/.local/share/skuld/state.sqlite"}
-    if not isinstance(cfg.get("llm"), dict):
-        cfg["llm"] = {"enabled": True, "maxCommits": 10, "includeDiff": False}
+        cfg["state"] = {"path": "~/.local/share/skuld/state.json"}
     if not isinstance(cfg.get("wakatime"), dict):
         cfg["wakatime"] = {}
     cfg["wakatime"]["apiKey"] = wakatime_api
@@ -706,7 +695,6 @@ def build_parser() -> argparse.ArgumentParser:
     sy.add_argument("--test", action="store_true", default=False, help="Dry-run: print what would be logged")
     sy.add_argument("--project", default=None, help="Project/repo path (optional)")
     sy.add_argument("--wakatime-file", default=None, help="Path to a WakaTime summaries JSON file for the period")
-    sy.add_argument("--use-rest", action="store_true", default=False, help="Use Jira REST instead of MCP")
     sy.add_argument("--debug", action="store_true", default=False, help="Print debug info about allocation")
     sy.set_defaults(func=handle_sync)
 

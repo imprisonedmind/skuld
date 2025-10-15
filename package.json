@@ -1,0 +1,9 @@
+{
+  "name": "skuld-cli",
+  "version": "0.1.0",
+  "description": "Skuld: WakaTime + Git → Jira worklogs",
+  "bin": {
+    "skuld": "bin/skuld.js"
+  },
+  "license": "UNLICENSED"
+}

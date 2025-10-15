@@ -1,6 +1,6 @@
 # Skuld (MVP)
 
-Skuld is a local CLI that correlates your development activity (WakaTime + Git) to Jira issues and posts accurate worklogs and comments. It runs locally, is MCP‑friendly (optional), and uses Jira REST.
+Skuld is a local CLI that correlates your development activity (WakaTime + Git) to Jira issues and posts accurate worklogs and comments. It runs locally and uses Jira REST.
 
 - Branch‑based attribution: allocates WakaTime time to issues by matching keys in branch names
 - Ownership filter: only issues assigned to you (verified via Jira /myself)
@@ -27,6 +27,16 @@ Skuld is a local CLI that correlates your development activity (WakaTime + Git) 
 4) Upload (apply):
    - `python -m skuld.cli sync week --project /path/to/repo`
    - Posts worklogs and a separate issue comment for each positive delta.
+
+## Install Options (for production use)
+- pipx (recommended):
+  - `pipx install .` (from this repo) or package when published.
+  - Then run `skuld ...` via the pipx shim if configured as a console script, or use `python -m skuld.cli`.
+- npm (wrapper):
+  - `npm install -g skuld-cli` (when published), or from this repo: `npm link`.
+  - Then run `skuld ...` — the wrapper calls `python -m skuld.cli`.
+- Homebrew:
+  - Create a formula that installs the npm wrapper or a Python shim; see docs/skuld-plan.md Distribution.
 
 ## Behavior and Rules
 - Attribution
@@ -81,7 +91,6 @@ state:
 ## Notes and Limitations
 - WakaTime “Summaries” per‑day totals are used; for precise partial‑day slicing we can add “Durations” support later.
 - The `started` timestamp for worklogs is currently “now”. If you prefer a different policy (e.g., end of window), we can adjust.
-- MCP is optional and currently not required; all uploads use Jira REST.
 
 ## Roadmap
 - Optional LLM‑assisted split across parent/child issues
