@@ -581,10 +581,13 @@ def handle_sync(args: argparse.Namespace) -> int:
         date_str = format_date(now)
         time_str = format_time(now)
         sep = "-" * 89
+        printed_any = False
         for issue in preview["issues"]:
             seconds = int(issue.get("seconds", 0))
             already = int(issue.get("already_logged", 0))
             delta = int(issue.get("delta", seconds))
+            if delta <= 0:
+                continue
             # Use Jira summary when available (preferred)
             name = issue.get("summary")
             lines = issue.get("comment", []) or []
@@ -599,6 +602,9 @@ def handle_sync(args: argparse.Namespace) -> int:
             print(f"  [SKULD] - Adding `{format_seconds(delta)}` on `{date_str}` at `{time_str}`  ")
             for ln in lines[:5]:
                 print(f"  - {ln}")
+            printed_any = True
+        if not printed_any:
+            print("Nothing to add — all covered by existing Jira worklogs.")
         print(sep)
         return 0
 
