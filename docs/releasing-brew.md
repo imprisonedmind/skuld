@@ -4,13 +4,13 @@ Goal: `brew tap imprisonedmind/skuld` then `brew install skuld` for a stable rel
 
 1) Tag a release
 - In this repo:
-  - `git tag v0.1.0`
-  - `git push origin v0.1.0`
+  - `git tag v0.1.1`
+  - `git push origin v0.1.1`
 
 2) Compute the release tarball checksum
 - On your machine:
-  - `curl -L -o skuld-0.1.0.tar.gz https://github.com/imprisonedmind/skuld/archive/refs/tags/v0.1.0.tar.gz`
-  - `shasum -a 256 skuld-0.1.0.tar.gz | cut -d' ' -f1` → copy the SHA256
+  - `curl -L -o skuld-0.1.1.tar.gz https://github.com/imprisonedmind/skuld/archive/refs/tags/v0.1.1.tar.gz`
+  - `shasum -a 256 skuld-0.1.1.tar.gz | cut -d' ' -f1` → copy the SHA256
 
 3) Create the tap repo
 - Create a new public repo: `imprisonedmind/homebrew-skuld`
@@ -20,7 +20,7 @@ Goal: `brew tap imprisonedmind/skuld` then `brew install skuld` for a stable rel
 class Skuld < Formula
   desc "Skuld: WakaTime + Git → Jira worklogs"
   homepage "https://github.com/imprisonedmind/skuld"
-  url "https://github.com/imprisonedmind/skuld/archive/refs/tags/v0.1.0.tar.gz"
+  url "https://github.com/imprisonedmind/skuld/archive/refs/tags/v0.1.1.tar.gz"
   sha256 "<RELEASE_TARBALL_SHA256>"
   license :cannot_represent
 

@@ -168,15 +168,14 @@ def _project_mapping(cfg: Dict[str, Any], project_path: str) -> str | None:
     projs = cfg.get("projects")
     if not isinstance(projs, dict):
         return None
-    # Try exact path match first, then basename match
-    pp = os.path.abspath(os.path.expanduser(project_path))
-    if pp in projs and isinstance(projs[pp], dict):
-        return projs[pp].get("wakatimeProject")
-    base = os.path.basename(pp)
+    # Only exact path match (normalized). No basename fallback to avoid cross‑repo bleed.
+    pp = os.path.realpath(os.path.abspath(os.path.expanduser(project_path)))
+    # Also check normalized keys in config
     for k, v in projs.items():
         if not isinstance(v, dict):
             continue
-        if os.path.basename(os.path.abspath(os.path.expanduser(k))) == base:
+        kk = os.path.realpath(os.path.abspath(os.path.expanduser(k)))
+        if kk == pp:
             return v.get("wakatimeProject")
     return None
 
@@ -516,13 +515,12 @@ def handle_sync(args: argparse.Namespace) -> int:
     if not isinstance(cfg, dict):
         cfg = {}
     period = args.period or "today"
-    # Enforce per-repo mapping when using WakaTime API (no auto-detect across projects)
+    # Require per-repo mapping for all syncs; no auto-detect or fallback.
     project_path = os.path.abspath(os.path.expanduser(args.project or os.getcwd()))
-    if not args.wakatime_file:
-        mapped = _project_mapping(cfg, project_path)
-        if not mapped:
-            print("This repo is not configured for Skuld.\nRun `skuld add` in this repo to map it to a WakaTime project (and optional Jira key).\nAlternatively, provide `--wakatime-file` for offline preview.")
-            return 2
+    mapped = _project_mapping(cfg, project_path)
+    if not mapped:
+        print("This repo is not configured for Skuld.\nRun `skuld add` in this repo to map it to a WakaTime project (and optional Jira key).")
+        return 2
     preview = _build_preview(period, project_path, args.wakatime_file, cfg)
 
     if args.test:

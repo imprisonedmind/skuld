@@ -30,7 +30,7 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 ## Use (global commands)
 - Preview (no writes):
   - Run inside the repo: `skuld sync week --test`
-  - If the repo is not mapped yet, the command will exit and prompt you to run `skuld add` here first.
+  - If the repo is not mapped yet, the command exits and prompts you to run `skuld add` here first.
   - Also supports `today` and `yesterday`.
 - Upload (writes to Jira):
   - `skuld sync week`
