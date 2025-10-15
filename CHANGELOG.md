@@ -1,11 +1,11 @@
 # Changelog
 
 ## v0.1.8
-- Describe changes here.
+- Uploads: when a Jira status transition occurs during upload (e.g., To Do → In Progress), append a note to the worklog/issue comment: "Updating status from XYZ to ABC".
 
 
 ## v0.1.7
-- Uploads: when a Jira status transition occurs during upload (e.g., To Do → In Progress), append a note to the worklog/issue comment: "Updating status from XYZ to ABC".
+- Describe changes here.
 
 
 ## v0.1.6
