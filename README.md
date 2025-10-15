@@ -5,6 +5,7 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 - Matches WakaTime branch names to Jira keys (e.g., SOT‑691)
 - Filters to issues assigned to you (Jira /myself)
 - Adds only the delta (WakaTime − already logged by you)
+- Ticket status: auto‑transitions "To Do/Todo" → "In Progress" on upload and notes the change
 - Posts a worklog and a separate issue comment with a [SKULD] header
 - Idempotent: won’t double‑post the same (issue, window, delta)
 
