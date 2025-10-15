@@ -19,6 +19,14 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
   - `brew install --HEAD https://raw.githubusercontent.com/imprisonedmind/skuld/main/Formula/skuld.rb`
   - Useful for testing unreleased changes.
 
+## Install (npm)
+- Prereqs: Node.js/npm and Python 3 available in your PATH.
+- Global install:
+  - `npm install -g skuld-cli`
+- Verify:
+  - `skuld --help`
+  - The Node shim will try `python3` (then `python`) and sets `PYTHONPATH` automatically.
+
 ## Setup (one‑time)
 - Configure your credentials:
   - `skuld start`
@@ -28,6 +36,7 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
   - This stores a per‑repo mapping in `~/.skuld.yaml` and is required so `sync` only uses time from the current repo’s WakaTime project.
 
 ## Use (global commands)
+- The commands are the same for Homebrew and npm installs; both provide a `skuld` binary on PATH.
 - Preview (no writes):
   - Run inside the repo: `skuld sync week --test`
   - If the repo is not mapped yet, the command exits and prompts you to run `skuld add` here first.
