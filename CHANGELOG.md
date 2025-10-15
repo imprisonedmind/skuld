@@ -5,23 +5,9 @@
 
 
 ## v0.1.7
-- Describe changes here.
-
-
-## v0.1.6
-- Describe changes here.
-
-
-## v0.1.5
-- Describe changes here.
-
-
-## v0.1.4
-- Describe changes here.
-
-
-## v0.1.3
-- Describe changes here.
+- Jira: automatically transition issues from "To Do"/"Todo" to "In Progress" when uploading worklogs; print the resulting status.
+- Preview: show current Jira status per issue and note when a transition will occur on upload.
+- Robustness: use strict ISO timestamps for Git commit times and normalize to timezone-aware UTC for correct filtering since the last upload.
 
 
 ## v0.1.2
