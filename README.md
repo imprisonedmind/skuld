@@ -9,15 +9,14 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 - Idempotent: won’t double‑post the same (issue, window, delta)
 
 ## Install (Homebrew)
-- HEAD install from this repo:
-  - `brew install --HEAD https://raw.githubusercontent.com/imprisonedmind/skuld/main/Formula/skuld.rb`
-  - This installs a global `skuld` command that uses the current directory by default.
+- Stable (recommended):
+  - `brew tap imprisonedmind/skuld`
+  - `brew install skuld`
+  - Upgrade later with: `brew update && brew upgrade skuld`
 
-- Public tap (stable):
-  - Once the tap is created at `imprisonedmind/homebrew-skuld` with a tagged release:
-    - `brew tap imprisonedmind/skuld`
-    - `brew install skuld`
-  - See `docs/releasing-brew.md` for how to publish the tap.
+- Dev/HEAD (from this repo):
+  - `brew install --HEAD https://raw.githubusercontent.com/imprisonedmind/skuld/main/Formula/skuld.rb`
+  - Useful for testing unreleased changes.
 
 ## Setup (one‑time)
 - Configure your credentials:
