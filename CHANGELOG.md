@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.16
+- CLI: add `--version` to print the installed version.
+- Docs: clarify Homebrew tap mapping (`imprisonedmind/skuld` → `imprisonedmind/homebrew-skuld`) and note that `skuld-cli/Formula/skuld.rb` is a scaffold only.
+- Tap: no functional changes; release pipeline unchanged, but Python `__version__` is now kept in sync by the release script.
+
 ## v0.1.14
 - Fix: include WakaTime-only keys when verifying Jira ownership so time on branches without commits in the window (e.g., SOT-718) is allocated and shown in previews/uploads.
 
