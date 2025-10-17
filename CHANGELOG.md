@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.14
+- Describe changes here.
+
+
 ## v0.1.13
 - Default behavior: running `skuld` (no args) now shows a concise usage guide; `skuld sync` performs an incremental sync from the last successful sync to now (first run falls back to 24h).
 - State: track per-repo last sync time in `~/.local/share/skuld/state.json`.
