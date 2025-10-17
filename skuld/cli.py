@@ -470,6 +470,41 @@ def _build_preview(period: str | None, project: str, wakatime_file: str | None, 
     debug_info["keys"]["candidate"] = sorted(list(candidate_keys))
     debug_info["keys"]["from_branches"] = sorted(list(alloc_by_key.keys()))
 
+    # If ownership was verified earlier using only commit-derived keys, we may have
+    # missed keys that appeared solely via WakaTime branch names. Expand the Jira
+    # ownership check to include any newly discovered keys so WakaTime-only issues
+    # (with no commits in the window) are not filtered out.
+    if jira_site and jira_email and jira_token and candidate_keys:
+        try:
+            missing_keys = sorted([k for k in candidate_keys if k not in (jira_info or {})])
+            if missing_keys:
+                # Resolve current user (accountId) if not already captured
+                acct_id = debug_info.get("jira", {}).get("whoami_accountId")
+                if not acct_id:
+                    me2, _me2err = get_myself(jira_site, jira_email, jira_token)
+                    acct_id = (me2 or {}).get("accountId") if me2 else None
+                    debug_info["jira"]["whoami_accountId"] = acct_id
+                jira_all2, meta_expand = search_issues_noassignee(jira_site, jira_email, jira_token, missing_keys)
+                if meta_expand:
+                    debug_info["jira"]["meta_expand"] = meta_expand
+                if jira_all2:
+                    # Merge into jira_info using same ownership rules
+                    if acct_id:
+                        for k, v in jira_all2.items():
+                            if v.get("assigneeAccountId") == acct_id:
+                                jira_info[k] = {"summary": v.get("summary"), "url": v.get("url")}
+                    elif jira_email:
+                        for k, v in jira_all2.items():
+                            if v.get("assigneeEmail") == jira_email:
+                                jira_info[k] = {"summary": v.get("summary"), "url": v.get("url")}
+                    # If we picked up any new keys, mark ownership verified and refresh debug list
+                    if jira_info:
+                        ownership_verified = True
+                        debug_info["jira_filtered_keys"] = sorted(list(jira_info.keys()))
+        except Exception:
+            # Non-fatal: proceed without the expansion
+            pass
+
     # If we have WakaTime-derived candidate keys but have not yet verified ownership, try now
     if jira_site and jira_email and jira_token and candidate_keys and not ownership_verified:
         # As a last resort, try the previous filtered search (may fail 410 in some setups)
