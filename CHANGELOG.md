@@ -3,6 +3,9 @@
 ## v0.1.14
 - Fix: include WakaTime-only keys when verifying Jira ownership so time on branches without commits in the window (e.g., SOT-718) is allocated and shown in previews/uploads.
 
+## v0.1.15
+- Feature: add `jira.requireOwnership` (default true). When set to `false`, Skuld will include issues discovered from WakaTime branches even if Jira ownership cannot be verified (useful when Jira privacy restrictions hide assignee info).
+
 
 ## v0.1.13
 - Default behavior: running `skuld` (no args) now shows a concise usage guide; `skuld sync` performs an incremental sync from the last successful sync to now (first run falls back to 24h).
