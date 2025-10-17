@@ -1,12 +1,12 @@
 # Skuld
 
-Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira worklogs and readable comments.
+Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira worklogs (and optional issue comments).
 
 - Matches WakaTime branch names to Jira keys (e.g., SOT‑691)
 - Filters to issues assigned to you (Jira /myself)
 - Adds only the delta (WakaTime − already logged by you)
 - Ticket status: auto‑transitions "To Do/Todo" → "In Progress" on upload and notes the change
-- Posts a worklog and a separate issue comment with a [SKULD] header
+- Posts a worklog with a [SKULD] header. Separate issue comments are disabled by default and can be enabled via config.
 - Idempotent: won’t double‑post the same (issue, window, delta)
 
 ## Install Overview
@@ -38,12 +38,13 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 ## Use (global commands)
 - The commands are the same for Homebrew and npm installs; both provide a `skuld` binary on PATH.
 - Preview (no writes):
-  - Run inside the repo: `skuld sync week --test`
+  - Run inside the repo: `skuld sync --test` (uses the window since your last successful sync) or specify a period like `week`.
   - If the repo is not mapped yet, the command exits and prompts you to run `skuld add` here first.
   - Also supports `today` and `yesterday`.
 - Upload (writes to Jira):
-  - `skuld sync week`
-  - Only posts when there’s time to add; adds a worklog and a matching issue comment.
+  - `skuld sync`
+  - By default, syncs everything since your last successful sync; you can also run `skuld sync week` or `skuld sync today`.
+  - Only posts when there’s time to add; adds a worklog. Issue comments are optional (see Configuration).
 
 ## What it prints (preview)
 ```
@@ -62,7 +63,7 @@ Comment:
 - Attribution: WakaTime per‑branch seconds (Summaries API) → branch names with issue keys.
 - Ownership: Jira `/rest/api/3/myself`, then local filter of issue assignee by your account.
 - Delta: For each issue and period: `max(0, WakaTimeSeconds − YourLoggedSecondsInWindow)`.
-- Uploads: Worklog with [SKULD] ADF comment + separate issue comment; idempotent.
+- Uploads: Worklog with [SKULD] ADF comment; optional separate issue comment (disabled by default); idempotent.
 
 ## Configuration
 Skuld reads `~/.skuld.yaml` and backs it up to `~/.skuld.yaml.bak` on changes. Minimal example:
@@ -80,6 +81,9 @@ projects:
     wakatimeProject: your-wakatime-project
 state:
   path: ~/.local/share/skuld/state.json
+comment:
+  # When true, also post a separate Jira issue comment mirroring the worklog text
+  issueCommentsEnabled: false
 ```
 
 ## License

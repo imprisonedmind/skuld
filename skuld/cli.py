@@ -20,7 +20,7 @@ from .jira import (
     ensure_in_progress,
     get_issue_status,
 )
-from .state import seen as state_seen, record as state_record
+from .state import seen as state_seen, record as state_record, get_last_sync as state_get_last_sync, set_last_sync as state_set_last_sync
 
 
 def _default_config_path() -> pathlib.Path:
@@ -173,6 +173,27 @@ def _period_bounds(period: str) -> Tuple[str, str]:
     raise ValueError(f"Unsupported period: {period}")
 
 
+def handle_root(args: argparse.Namespace) -> int:
+    """Print a concise getting-started guide when running `skuld` with no subcommand."""
+    cfg_path = _default_config_path()
+    cfg = load_config(cfg_path)
+    state_path = (cfg.get("state", {}).get("path") if isinstance(cfg.get("state"), dict) else cfg.get("state.path")) or "~/.local/share/skuld/state.json"
+    print("Skuld — WakaTime + Git → Jira worklogs")
+    print("")
+    print("Common commands:")
+    print("  • Configure credentials:  skuld start")
+    print("  • Map this repo:         skuld add")
+    print("  • Default sync (incremental since last sync):")
+    print("      skuld sync            # or add --test for a dry-run")
+    print("  • Explicit periods:       skuld sync today | yesterday | week")
+    print("")
+    print(f"Config: {str(cfg_path)}    State: {os.path.expanduser(state_path)}")
+    print("Notes:")
+    print("  - By default, Skuld does NOT post separate issue comments; only worklogs.")
+    print("    Enable with: comment.issueCommentsEnabled: true in ~/.skuld.yaml")
+    return 0
+
+
 def _project_mapping(cfg: Dict[str, Any], project_path: str) -> str | None:
     # Config shape: projects: { "/path/to/repo": { wakatimeProject: "name", jiraProjectKey: "SOT" } }
     projs = cfg.get("projects")
@@ -289,7 +310,8 @@ def handle_add(args: argparse.Namespace) -> int:
     return 0
 
 
-def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Dict[str, Any]) -> Dict[str, Any]:
+def _build_preview(period: str | None, project: str, wakatime_file: str | None, cfg: Dict[str, Any],
+                   since_override: str | None = None, until_override: str | None = None) -> Dict[str, Any]:
     if not isinstance(cfg, dict):
         cfg = {}
     jira = cfg.get("jira") or {}
@@ -297,7 +319,12 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
     issue_rx_raw = ((cfg.get("regex") or {}).get("issueKey") if isinstance(cfg.get("regex"), dict) else cfg.get("regex.issueKey")) or r"[A-Z][A-Z0-9]+-\d+"
     # Normalize escaped sequences like "\\d" → "\d" without triggering warnings
     issue_rx = issue_rx_raw.replace("\\\\", "\\")
-    since, until = _period_bounds(period)
+    # Determine window
+    if since_override and until_override:
+        since, until = since_override, until_override
+    else:
+        # Back-compat: infer from named period (defaults validated by caller)
+        since, until = _period_bounds(period or "today")
 
     commits = get_commits(project, since, until)
     groups = group_commits_by_issue(commits, issue_rx)
@@ -403,8 +430,17 @@ def _build_preview(period: str, project: str, wakatime_file: str | None, cfg: Di
             debug_info["wakatime"]["api_key_source"] = "config" if (wk.get("apiKey") if isinstance(wk, dict) else cfg.get("wakatime.apiKey")) else "wakatime.cfg"
             mapped_project = _project_mapping(cfg, project)
             if mapped_project:
-                # For short windows, use WakaTime Durations for precise slicing; else Summaries
-                use_durations = period.lower() in ("today", "yesterday", "24h", "24hours", "24", "day")
+                # For short windows, use WakaTime Durations for precise slicing; else Summaries.
+                # If explicit overrides are provided, pick durations for <= 48h windows.
+                if since_override and until_override:
+                    try:
+                        _s = dt.datetime.fromisoformat(since)
+                        _u = dt.datetime.fromisoformat(until)
+                        use_durations = (_u - _s) <= dt.timedelta(hours=48)
+                    except Exception:
+                        use_durations = False
+                else:
+                    use_durations = (period or "").lower() in ("today", "yesterday", "24h", "24hours", "24", "day")
                 if use_durations:
                     summary = fetch_durations_summary(api_key, since, until, project=mapped_project)
                     debug_info["wakatime"]["api"] = "durations"
@@ -600,7 +636,10 @@ def handle_start(args: argparse.Namespace) -> int:
     if not isinstance(cfg.get("time"), dict):
         cfg["time"] = {"zone": "local", "minLogMinutes": "parity", "aggregationWindow": "cli"}
     if not isinstance(cfg.get("comment"), dict):
-        cfg["comment"] = {"maxLines": 5, "includeCommitHashes": True}
+        cfg["comment"] = {"maxLines": 5, "includeCommitHashes": True, "issueCommentsEnabled": False}
+    else:
+        # Ensure the new flag exists (default disabled)
+        cfg["comment"].setdefault("issueCommentsEnabled", False)
     if not isinstance(cfg.get("state"), dict):
         cfg["state"] = {"path": "~/.local/share/skuld/state.json"}
     if not isinstance(cfg.get("wakatime"), dict):
@@ -616,16 +655,31 @@ def handle_sync(args: argparse.Namespace) -> int:
     cfg = load_config(_default_config_path())
     if not isinstance(cfg, dict):
         cfg = {}
-    period = args.period or "today"
+    # Safely access args attributes (top-level default to sync may omit subparser args)
+    period = getattr(args, "period", None)
+    is_test = bool(getattr(args, "test", False))
+    debug = bool(getattr(args, "debug", False))
     # Require per-repo mapping for all syncs; no auto-detect or fallback.
-    project_path = os.path.abspath(os.path.expanduser(args.project or os.getcwd()))
+    project_path = os.path.abspath(os.path.expanduser(getattr(args, "project", None) or os.getcwd()))
     mapped = _project_mapping(cfg, project_path)
     if not mapped:
         print("This repo is not configured for Skuld.\nRun `skuld add` in this repo to map it to a WakaTime project (and optional Jira key).")
         return 2
-    preview = _build_preview(period, project_path, args.wakatime_file, cfg)
+    # Determine window: if no period provided, sync since last sync
+    state_path = (cfg.get("state", {}).get("path") if isinstance(cfg.get("state"), dict) else cfg.get("state.path")) or "~/.local/share/skuld/state.json"
+    since_override = None
+    until_override = None
+    if not period:
+        now = dt.datetime.now()
+        last = state_get_last_sync(state_path, project_path)
+        if not last:
+            # First-run fallback: last 24h window
+            last = (now - dt.timedelta(hours=24)).replace(microsecond=0).isoformat()
+        since_override = last
+        until_override = now.replace(microsecond=0).isoformat()
+    preview = _build_preview(period, project_path, getattr(args, "wakatime_file", None), cfg, since_override, until_override)
 
-    if args.test:
+    if is_test:
         # Printer: follow docs/printer.md formatting
         print("Worklog Preview (dry-run)")
         print(f"Period: {preview['since']} → {preview['until']}")
@@ -641,11 +695,11 @@ def handle_sync(args: argparse.Namespace) -> int:
                 print("No issue keys found in commit messages for this period.")
             if total_all:
                 print(f"Unattributed WakaTime total: {format_seconds(total_all)}")
-            if getattr(args, "debug", False):
+            if debug:
                 print("\n[DEBUG] Details:")
                 print(json.dumps(preview.get("debug", {}), indent=2))
             return 0
-        if getattr(args, "debug", False):
+        if debug:
             print("\n[DEBUG] Issues in preview (key → seconds):")
             print(json.dumps({i["key"]: i["seconds"] for i in preview["issues"]}, indent=2))
             print("\n[DEBUG] Full details:")
@@ -690,7 +744,7 @@ def handle_sync(args: argparse.Namespace) -> int:
         print("Aborting: Jira ownership verification failed; not uploading.")
         return 2
 
-    state_path = (cfg.get("state", {}).get("path") if isinstance(cfg.get("state"), dict) else cfg.get("state.path")) or "~/.local/share/skuld/state.json"
+    # state_path already resolved above
 
     # Resolve worklog start timestamp policy
     now = dt.datetime.now().astimezone()
@@ -741,6 +795,10 @@ def handle_sync(args: argparse.Namespace) -> int:
     jira_site = (cfg.get("jira") or {}).get("site") if isinstance(cfg.get("jira"), dict) else cfg.get("jira.site")
     jira_email = (cfg.get("jira") or {}).get("email") if isinstance(cfg.get("jira"), dict) else cfg.get("jira.email")
     jira_token = (cfg.get("jira") or {}).get("apiToken") if isinstance(cfg.get("jira"), dict) else cfg.get("jira.apiToken")
+
+    # Whether to post separate Jira issue comments (configurable; default disabled)
+    comment_cfg = cfg.get("comment") if isinstance(cfg.get("comment"), dict) else {}
+    issue_comment_enabled = bool((comment_cfg.get("issueCommentsEnabled") if isinstance(comment_cfg, dict) else None) or (cfg.get("comment.issueCommentsEnabled") or False))
 
     for issue in preview["issues"]:
         seconds = int(issue.get("seconds", 0))
@@ -798,24 +856,29 @@ def handle_sync(args: argparse.Namespace) -> int:
             continue
         worklog_id = (data or {}).get("id") if isinstance(data, dict) else None
         state_record(state_path, issue["key"], preview["since"], preview["until"], delta, worklog_id=str(worklog_id) if worklog_id else None)
-        # Also add an issue comment with the same content
-        cdata, cerr = add_comment(
-            site=jira_site,
-            email=jira_email,
-            api_token=jira_token,
-            key=issue["key"],
-            comment_text=comment,
-        )
-        if cerr:
-            errors.append({"key": issue["key"], "error": f"comment: {cerr}"})
-        comment_id = (cdata or {}).get("id") if isinstance(cdata, dict) else None
+        comment_id = None
+        if issue_comment_enabled:
+            # Optional: add an issue comment mirroring the worklog note
+            cdata, cerr = add_comment(
+                site=jira_site,
+                email=jira_email,
+                api_token=jira_token,
+                key=issue["key"],
+                comment_text=comment,
+            )
+            if cerr:
+                errors.append({"key": issue["key"], "error": f"comment: {cerr}"})
+            comment_id = (cdata or {}).get("id") if isinstance(cdata, dict) else None
         uploaded.append({"key": issue["key"], "seconds": delta, "worklog_id": worklog_id, "comment_id": comment_id})
 
     # Summary
     print("Upload summary:")
     if uploaded:
         for u in uploaded:
-            print(f"  + {u['key']}: {format_seconds(u['seconds'])} (worklog {u.get('worklog_id') or '-'}, comment {u.get('comment_id') or '-'})")
+            if issue_comment_enabled:
+                print(f"  + {u['key']}: {format_seconds(u['seconds'])} (worklog {u.get('worklog_id') or '-'}, comment {u.get('comment_id') or '-'})")
+            else:
+                print(f"  + {u['key']}: {format_seconds(u['seconds'])} (worklog {u.get('worklog_id') or '-'})")
     else:
         print("  + No uploads (nothing to add)")
     if skipped:
@@ -825,12 +888,20 @@ def handle_sync(args: argparse.Namespace) -> int:
         print("Errors:")
         for e in errors:
             print(f"  ! {e['key']}: {e['error']}")
-    return 0 if uploaded and not errors else (1 if errors else 0)
+    exit_code = 0 if uploaded and not errors else (1 if errors else 0)
+    # Persist last sync upper bound if not a dry-run and no errors
+    if not is_test and not errors:
+        try:
+            state_set_last_sync(state_path, project_path, preview.get("until"))
+        except Exception:
+            pass
+    return exit_code
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="skuld", description="Skuld: WakaTime + Git → Jira worklogs")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    # Allow running without a subcommand; we'll print a friendly info message.
+    sub = p.add_subparsers(dest="cmd", required=False)
 
     sp = sub.add_parser("start", help="Initialize configuration (WakaTime + Jira/MCP)")
     sp.set_defaults(func=handle_start)
@@ -839,7 +910,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--project", default=None, help="Project/repo path (defaults to CWD)")
     ap.set_defaults(func=handle_add)
 
-    sy = sub.add_parser("sync", help="Sync worklogs for a period")
+    sy = sub.add_parser("sync", help="Sync worklogs for a period or since last sync (default)")
     sy.add_argument("period", nargs="?", choices=["today", "yesterday", "week"], help="Time range to analyze")
     sy.add_argument("--test", action="store_true", default=False, help="Dry-run: print what would be logged")
     sy.add_argument("--project", default=None, help="Project/repo path (optional)")
@@ -847,6 +918,8 @@ def build_parser() -> argparse.ArgumentParser:
     sy.add_argument("--debug", action="store_true", default=False, help="Print debug info about allocation")
     sy.set_defaults(func=handle_sync)
 
+    # If no subcommand is provided, show a concise how-to message
+    p.set_defaults(func=handle_root, cmd=None)
     return p
 
 
