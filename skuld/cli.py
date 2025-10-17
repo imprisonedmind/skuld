@@ -316,6 +316,14 @@ def _build_preview(period: str | None, project: str, wakatime_file: str | None, 
         cfg = {}
     jira = cfg.get("jira") or {}
     jira_site = jira.get("site", "") if isinstance(jira, dict) else (cfg.get("jira.site") or "")
+    # Ownership policy: by default we require that issues be assigned to the current user.
+    # Allow opt-out via `jira.requireOwnership: false`.
+    require_ownership_raw = None
+    if isinstance(jira, dict):
+        require_ownership_raw = jira.get("requireOwnership")
+    if require_ownership_raw is None:
+        require_ownership_raw = cfg.get("jira.requireOwnership")
+    require_ownership = True if require_ownership_raw is None else bool(require_ownership_raw)
     issue_rx_raw = ((cfg.get("regex") or {}).get("issueKey") if isinstance(cfg.get("regex"), dict) else cfg.get("regex.issueKey")) or r"[A-Z][A-Z0-9]+-\d+"
     # Normalize escaped sequences like "\\d" → "\d" without triggering warnings
     issue_rx = issue_rx_raw.replace("\\\\", "\\")
@@ -387,6 +395,9 @@ def _build_preview(period: str | None, project: str, wakatime_file: str | None, 
             "normalized": issue_rx,
         },
         "jira_filtered_keys": [],
+        "policy": {
+            "require_ownership": require_ownership,
+        },
     }
     # Candidate keys from commits so far; will union with WakaTime keys below
     candidate_keys: set[str] = set(groups.keys())
@@ -520,8 +531,8 @@ def _build_preview(period: str | None, project: str, wakatime_file: str | None, 
     # Build final key set: union of commit keys and WakaTime keys
     final_keys = sorted(candidate_keys)
     for key in final_keys:
-        # Enforce ownership if verified
-        if ownership_verified and key not in jira_info:
+        # Enforce ownership if verified and required by policy
+        if require_ownership and ownership_verified and key not in jira_info:
             continue
         items = groups.get(key, [])
         # Also pull commits that are on any WakaTime-observed branches matching this key
@@ -613,7 +624,7 @@ def _build_preview(period: str | None, project: str, wakatime_file: str | None, 
         })
 
     notes: List[str] = []
-    if not ownership_verified:
+    if require_ownership and not ownership_verified:
         msg = "Jira ownership verification failed."
         if debug_info.get("jira", {}).get("meta", {}).get("chunks"):
             errs = [c for c in debug_info["jira"]["meta"]["chunks"] if c.get("error")]
@@ -775,7 +786,10 @@ def handle_sync(args: argparse.Namespace) -> int:
         return 0
 
     # Apply mode: upload Jira worklogs for positive deltas only, idempotently.
-    if not preview.get("ownership_verified"):
+    # Respect ownership policy: if ownership is required but not verified, abort.
+    policy = (preview.get("debug", {}) or {}).get("policy", {}) if isinstance(preview, dict) else {}
+    require_ownership = bool(policy.get("require_ownership", True))
+    if require_ownership and not preview.get("ownership_verified"):
         print("Aborting: Jira ownership verification failed; not uploading.")
         return 2
 
