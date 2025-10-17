@@ -4,7 +4,7 @@ __all__ = [
 ]
 
 # NOTE: This version is kept in sync with package.json by release.sh
-__version__ = "0.1.16"
+__version__ = "0.1.17"
 
 def main():
     from .cli import main as cli_main

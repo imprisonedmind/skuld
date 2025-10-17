@@ -19,6 +19,10 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
   - `brew install skuld`
   - Upgrade later with: `brew update && brew upgrade skuld`
 
+Note on taps:
+- `brew tap imprisonedmind/skuld` maps to the GitHub repo `imprisonedmind/homebrew-skuld`. Homebrew taps are separate repositories rooted at `Formula/` and cannot point to a subdirectory inside another repo.
+- The file `skuld-cli/Formula/skuld.rb` in this repo is a scaffold used for development/examples only; Homebrew does not use it. The actual tap formula lives in the `homebrew-skuld` repository.
+
 ## Install (Linux via npm)
 - Prereqs: Node.js/npm and Python 3 available in your PATH.
 - Global install:

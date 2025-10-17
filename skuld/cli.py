@@ -5,6 +5,7 @@ import os
 import pathlib
 from typing import Any, Dict, List, Tuple
 import subprocess
+from . import __version__
 
 from .git import get_commits, group_commits_by_issue, get_commits_for_branches
 from .util import format_seconds, format_date, format_time
@@ -949,6 +950,7 @@ def handle_sync(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="skuld", description="Skuld: WakaTime + Git → Jira worklogs")
+    p.add_argument("--version", action="store_true", help="Print version and exit")
     # Allow running without a subcommand; we'll print a friendly info message.
     sub = p.add_subparsers(dest="cmd", required=False)
 
@@ -975,6 +977,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Any = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "version", False):
+        print(f"skuld {__version__}")
+        return 0
     return args.func(args)
 
 

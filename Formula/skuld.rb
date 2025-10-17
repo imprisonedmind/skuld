@@ -1,3 +1,7 @@
+# NOTE: This file is a development scaffold/example and is not used by Homebrew.
+# The actual tap formula lives in the separate repo `imprisonedmind/homebrew-skuld`
+# which Homebrew uses via: `brew tap imprisonedmind/skuld`.
+
 class Skuld < Formula
   desc "Skuld: WakaTime + Git → Jira worklogs"
   homepage "https://github.com/imprisonedmind/skuld"
