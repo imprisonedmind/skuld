@@ -1,7 +1,11 @@
 # Changelog
 
 ## v0.1.13
-- Describe changes here.
+- Default behavior: running `skuld` (no args) now shows a concise usage guide; `skuld sync` performs an incremental sync from the last successful sync to now (first run falls back to 24h).
+- State: track per-repo last sync time in `~/.local/share/skuld/state.json`.
+- Comments: disable separate Jira issue comments by default; add `comment.issueCommentsEnabled` config flag to opt-in.
+- CLI: safer arg handling and small robustness tweaks around window selection and WakaTime API choice.
+- Docs: update main README and Homebrew tap README for new defaults and examples.
 
 
 ## v0.1.12
