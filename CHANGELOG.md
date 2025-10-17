@@ -1,7 +1,7 @@
 # Changelog
 
 ## v0.1.14
-- Describe changes here.
+- Fix: include WakaTime-only keys when verifying Jira ownership so time on branches without commits in the window (e.g., SOT-718) is allocated and shown in previews/uploads.
 
 
 ## v0.1.13
