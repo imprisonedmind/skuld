@@ -24,7 +24,7 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 - Global install:
   - `npm install -g skuld-cli`
 - Verify:
-  - `skuld --help`
+  - `skuld` (shows a concise usage guide) or `skuld --help`
   - The Node shim will try `python3` (then `python`) and sets `PYTHONPATH` automatically.
 
 ## Setup (one‑time)
@@ -37,6 +37,7 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 
 ## Use (global commands)
 - The commands are the same for Homebrew and npm installs; both provide a `skuld` binary on PATH.
+- Run with no args for a quick guide: `skuld`
 - Preview (no writes):
   - Run inside the repo: `skuld sync --test` (uses the window since your last successful sync) or specify a period like `week`.
   - If the repo is not mapped yet, the command exits and prompts you to run `skuld add` here first.
@@ -48,16 +49,19 @@ Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira 
 
 ## What it prints (preview)
 ```
+Worklog Preview (dry-run)
+Period: 2025-10-15T09:00:00 → 2025-10-15T17:30:00
 -----------------------------------------------------------------------------------------
 Issue: SOT-691
 Name:  Use real data from mongoDB
 Time to add:  1h 26m 28s
 Total Time: 1h 26m 28s
 Comment:
-  [SKULD] - Adding `1h 26m 28s` on `15/10/25` at `1:28 PM`  
+  [SKULD] - Adding `1h 26m 28s` on `15/10/25` at `1:28 PM`
   - SOT-691 Use real data from mongoDB
 -----------------------------------------------------------------------------------------
 ```
+The comment shown is attached to the worklog itself. Separate issue comments are disabled by default.
 
 ## How it decides
 - Attribution: WakaTime per‑branch seconds (Summaries API) → branch names with issue keys.
