@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.18
+- Feature: new `branches` command to list recent WakaTime branches and map them to Jira keys. Supports `--interactive`, `--set BRANCH KEY`, `--unset BRANCH`, `--list`, and `--days N` (default 7 days).
+- Allocation: when a branch name lacks an embedded Jira key, Skuld now uses per‑repo `branchIssues` mappings from `~/.skuld.yaml` to attribute WakaTime time to the correct issue.
+- WakaTime: prefer Durations API for branch aggregation in `branches`; request branch breakdown from Summaries where applicable.
+- Defaults: `branches` uses a 7‑day lookback for speed; pass `--days` to change.
+
 ## v0.1.17
 - CLI: add `--version` to print the installed version.
 - Docs: clarify Homebrew tap mapping (`imprisonedmind/skuld` → `imprisonedmind/homebrew-skuld`) and note that `skuld-cli/Formula/skuld.rb` is a scaffold only.

@@ -51,6 +51,35 @@ Note on taps:
   - By default, syncs everything since your last successful sync; you can also run `skuld sync week` or `skuld sync today`.
   - Only posts when there’s time to add; adds a worklog. Issue comments are optional (see Configuration).
 
+## Branch Mapping
+- Purpose: sometimes you create and work on a Git branch before a Jira ticket exists. Use Skuld to map branches to Jira keys after the fact so that time on those branches is correctly attributed during syncs.
+
+- List branches and mappings
+  - `skuld branches --list` (run inside the repo or pass `--project /path/to/repo`)
+  - Shows recent WakaTime branches for this repo’s mapped WakaTime project (last 7 days by default) plus any already‑mapped branches.
+  - For longer history: `skuld branches --list --days 30`
+
+- Interactive mapping
+  - `skuld branches --interactive`
+  - Pick a branch from the list and enter a Jira key (e.g., `SOT-728`). Mapping is saved to `~/.skuld.yaml` under this repo.
+
+- Direct set/unset
+  - Set: `skuld branches --set "feature/my-branch" ABC-123`
+  - Unset: `skuld branches --unset "feature/my-branch"`
+
+- Where it’s stored
+  - In `~/.skuld.yaml`:
+    ```yaml
+    projects:
+      "/absolute/path/to/repo":
+        wakatimeProject: your-wakatime-project
+        branchIssues:
+          feature/my-branch: ABC-123
+    ```
+
+- How sync uses it
+  - During allocation, if a WakaTime branch name does not contain a Jira key, Skuld will use your `branchIssues` mapping to attribute time to the specified Jira issue.
+
 ## What it prints (preview)
 ```
 Worklog Preview (dry-run)
@@ -92,6 +121,13 @@ state:
 comment:
   # When true, also post a separate Jira issue comment mirroring the worklog text
   issueCommentsEnabled: false
+
+# Branch mapping (optional)
+projects:
+  "/absolute/path/to/repo":
+    wakatimeProject: your-wakatime-project
+    branchIssues:
+      feature/my-branch: ABC-123
 ```
 
 ## License

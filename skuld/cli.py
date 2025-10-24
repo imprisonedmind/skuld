@@ -212,6 +212,21 @@ def _project_mapping(cfg: Dict[str, Any], project_path: str) -> str | None:
     return None
 
 
+def _project_entry(cfg: Dict[str, Any], project_path: str) -> Dict[str, Any] | None:
+    """Return the projects[repo] entry dict for this repo path, if configured."""
+    projs = cfg.get("projects")
+    if not isinstance(projs, dict):
+        return None
+    pp = os.path.realpath(os.path.abspath(os.path.expanduser(project_path)))
+    for k, v in projs.items():
+        if not isinstance(v, dict):
+            continue
+        kk = os.path.realpath(os.path.abspath(os.path.expanduser(k)))
+        if kk == pp:
+            return v
+    return None
+
+
 def _git_remote_repo_name(project_path: str) -> str | None:
     try:
         out = subprocess.run(["git", "-C", project_path, "remote", "get-url", "origin"], capture_output=True, text=True, check=False)
@@ -474,6 +489,19 @@ def _build_preview(period: str | None, project: str, wakatime_file: str | None, 
     for bname, secs in (branch_seconds or {}).items():
         matches = rx.findall(bname or "")
         if not matches:
+            # If the branch name has no embedded issue key, allow explicit mapping
+            proj_entry = _project_entry(cfg, project)
+            mapped_key = None
+            if isinstance(proj_entry, dict):
+                # Support either "branchIssues" (preferred) or legacy "branchMapping"
+                bmap = proj_entry.get("branchIssues") or proj_entry.get("branchMapping") or {}
+                if isinstance(bmap, dict):
+                    mapped_key = bmap.get(bname)
+            if mapped_key:
+                k = str(mapped_key)
+                alloc_by_key[k] = alloc_by_key.get(k, 0.0) + float(secs or 0.0)
+                branches_by_key.setdefault(k, []).append(bname)
+                candidate_keys.add(k)
             continue
         for m in matches:
             alloc_by_key[m] = alloc_by_key.get(m, 0.0) + float(secs or 0.0)
@@ -948,6 +976,124 @@ def handle_sync(args: argparse.Namespace) -> int:
     return exit_code
 
 
+def handle_branches(args: argparse.Namespace) -> int:
+    """List recent WakaTime branches for this repo and assign/remove Jira keys."""
+    cfg = load_config(_default_config_path())
+    if not isinstance(cfg, dict):
+        cfg = {}
+    project_path = os.path.abspath(os.path.expanduser(getattr(args, "project", None) or os.getcwd()))
+    proj_entry = _project_entry(cfg, project_path)
+    if not proj_entry or not proj_entry.get("wakatimeProject"):
+        print("This repo is not configured for Skuld.\nRun `skuld add` in this repo to map it to a WakaTime project.")
+        return 2
+    wk_cfg = cfg.get("wakatime") if isinstance(cfg.get("wakatime"), dict) else {}
+    api_key = (wk_cfg.get("apiKey") if isinstance(wk_cfg, dict) else None) or cfg.get("wakatime.apiKey") or discover_api_key()
+    if not api_key:
+        print("WakaTime API key not found. Run `skuld start` or add wakatime.apiKey to ~/.skuld.yaml.")
+        return 2
+
+    # Determine time window internally (long recent range by default) but do not expose as a concept
+    now = dt.datetime.now()
+    days = int(getattr(args, "days", 365) or 365)
+    try:
+        days = max(1, min(days, 3650))
+    except Exception:
+        days = 365
+    since_iso = (now - dt.timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    until_iso = now.isoformat()
+
+    mapped_project = proj_entry.get("wakatimeProject")
+    # Prefer durations for reliable branch data across the chosen range
+    summary = fetch_durations_summary(api_key, since_iso, until_iso, project=mapped_project)
+    branches = summary.get("branches") or {}
+    # Current mapping dict (create on first write)
+    current_map = {}
+    if isinstance(proj_entry.get("branchIssues"), dict):
+        current_map = dict(proj_entry.get("branchIssues"))
+    elif isinstance(proj_entry.get("branchMapping"), dict):
+        current_map = dict(proj_entry.get("branchMapping"))
+
+    # Handle non-interactive set/unset first
+    set_args = getattr(args, "set", None)
+    unset_arg = getattr(args, "unset", None)
+    changed = False
+    if set_args and len(set_args) == 2:
+        b, key = set_args[0], set_args[1]
+        if b:
+            if not isinstance(proj_entry.get("branchIssues"), dict):
+                proj_entry["branchIssues"] = {}
+            proj_entry["branchIssues"][b] = key
+            changed = True
+            print(f"Mapped branch → issue: '{b}' → {key}")
+    if unset_arg:
+        b = unset_arg
+        if isinstance(proj_entry.get("branchIssues"), dict) and b in proj_entry["branchIssues"]:
+            proj_entry["branchIssues"].pop(b, None)
+            changed = True
+            print(f"Removed mapping for branch: '{b}'")
+
+    # Build combined list (union of WakaTime and existing mappings)
+    combined_names = set(branches.keys()) | set(current_map.keys())
+    items = [(bn, float(branches.get(bn, 0.0))) for bn in combined_names]
+    # Sort by seconds desc, then name
+    items.sort(key=lambda kv: (kv[1], kv[0]), reverse=True)
+
+    # Interactive flow if requested and no non-interactive set
+    if getattr(args, "interactive", False) and not set_args and not unset_arg:
+        if not items:
+            print("No branches found.")
+            return 0
+        print("Branches:")
+        for i, (bn, secs) in enumerate(items, start=1):
+            mark = f" [{current_map.get(bn)}]" if bn in current_map else ""
+            secf = format_seconds(float(secs or 0.0)) if secs else "0s"
+            print(f"  {i}. {bn}  ({secf}){mark}")
+        sel = _prompt("Select a branch number to assign", default="1")
+        try:
+            idx = int(sel)
+        except Exception:
+            idx = 1
+        idx = max(1, min(idx, len(items)))
+        chosen_branch = items[idx - 1][0]
+        key = _prompt("Enter Jira issue key (e.g., ABC-123)")
+        if key:
+            if not isinstance(proj_entry.get("branchIssues"), dict):
+                proj_entry["branchIssues"] = {}
+            proj_entry["branchIssues"][chosen_branch] = key
+            changed = True
+            print(f"Mapped branch → issue: '{chosen_branch}' → {key}")
+
+    # Save config if changed
+    if changed:
+        # Merge updated project entry back into cfg and write
+        # Find exact key used for this repo to ensure write
+        projs = cfg.get("projects") if isinstance(cfg.get("projects"), dict) else {}
+        pp = os.path.realpath(os.path.abspath(os.path.expanduser(project_path)))
+        for k in list(projs.keys()):
+            kk = os.path.realpath(os.path.abspath(os.path.expanduser(k)))
+            if kk == pp:
+                projs[k] = proj_entry
+                break
+        cfg["projects"] = projs
+        out = _save_config_prefer_skuld(cfg)
+        print(f"Saved mapping to {out}")
+
+    # Print list if requested or when no interactive/set/unset was used
+    if getattr(args, "list", False) or (not getattr(args, "interactive", False) and not set_args and not unset_arg):
+        if items:
+            print("Branches:")
+            for bn, secs in items:
+                secf = format_seconds(float(secs or 0.0)) if secs else "0s"
+                mapped = (proj_entry.get("branchIssues", {}) or {}).get(bn)
+                if mapped:
+                    print(f"  - {bn}: {secf}  → {mapped}")
+                else:
+                    print(f"  - {bn}: {secf}")
+        else:
+            print("No branches found.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="skuld", description="Skuld: WakaTime + Git → Jira worklogs")
     p.add_argument("--version", action="store_true", help="Print version and exit")
@@ -968,6 +1114,15 @@ def build_parser() -> argparse.ArgumentParser:
     sy.add_argument("--wakatime-file", default=None, help="Path to a WakaTime summaries JSON file for the period")
     sy.add_argument("--debug", action="store_true", default=False, help="Print debug info about allocation")
     sy.set_defaults(func=handle_sync)
+
+    br = sub.add_parser("branches", help="List WakaTime branches and map to Jira keys")
+    br.add_argument("--project", default=None, help="Project/repo path (optional)")
+    br.add_argument("--interactive", action="store_true", default=False, help="Interactively assign a Jira key to a branch")
+    br.add_argument("--set", nargs=2, metavar=("BRANCH", "KEY"), help="Map a branch to a Jira key")
+    br.add_argument("--unset", metavar="BRANCH", help="Remove branch mapping")
+    br.add_argument("--list", action="store_true", default=False, help="List branches and existing mappings")
+    br.add_argument("--days", type=int, default=7, help="How many recent days to fetch from WakaTime (default: 7)")
+    br.set_defaults(func=handle_branches)
 
     # If no subcommand is provided, show a concise how-to message
     p.set_defaults(func=handle_root, cmd=None)

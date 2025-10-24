@@ -46,6 +46,8 @@ def fetch_total_seconds(api_key: str, since_iso: str, until_iso: str, project: O
         "end": _date_part(until_iso),
         "api_key": api_key,
     }
+    # Ask for branches breakdown when available (ignored if unsupported)
+    params["branches"] = "true"
     if project:
         params["project"] = project
     qs = urlencode(params)
