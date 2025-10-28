@@ -24,6 +24,7 @@ Skuld — WakaTime + Git → Jira worklogs
 
 </div>
 
+<br/>
 
 - Matches WakaTime branch names to Jira keys (e.g., SOT‑691)
 - Filters to issues assigned to you (Jira /myself)
