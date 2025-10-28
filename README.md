@@ -1,6 +1,29 @@
-# Skuld
+<div align="center">
+<pre>
+           /$$                 /$$       /$$
+          | $$                | $$      | $$
+  /$$$$$$$| $$   /$$ /$$   /$$| $$  /$$$$$$$
+ /$$_____/| $$  /$$/| $$  | $$| $$ /$$__  $$
+|  $$$$$$ | $$$$$$/ | $$  | $$| $$| $$  | $$
+ \____  $$| $$_  $$ | $$  | $$| $$| $$  | $$
+ /$$$$$$$/| $$ \  $$|  $$$$$$/| $$|  $$$$$$$
+|_______/ |__/  \__/ \______/ |__/ \_______/
 
-Skuld is a global CLI that turns your WakaTime + Git activity into correct Jira worklogs (and optional issue comments).
+Skuld — WakaTime + Git → Jira worklogs
+</pre>
+
+<div align="center" >
+  <a href="https://www.npmjs.com/package/skuld-cli">
+    <img src="https://img.shields.io/npm/v/skuld-cli.svg?logo=npm" alt="npm version">
+  </a>
+  &nbsp;
+  <a href="https://www.npmjs.com/package/skuld-cli">
+    <img src="https://img.shields.io/npm/dm/skuld-cli.svg?label=downloads&logo=npm" alt="npm downloads">
+  </a>
+</div>
+
+</div>
+
 
 - Matches WakaTime branch names to Jira keys (e.g., SOT‑691)
 - Filters to issues assigned to you (Jira /myself)
