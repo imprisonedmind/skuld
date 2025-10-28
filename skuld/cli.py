@@ -179,16 +179,32 @@ def handle_root(args: argparse.Namespace) -> int:
     cfg_path = _default_config_path()
     cfg = load_config(cfg_path)
     state_path = (cfg.get("state", {}).get("path") if isinstance(cfg.get("state"), dict) else cfg.get("state.path")) or "~/.local/share/skuld/state.json"
-    print("Skuld — WakaTime + Git → Jira worklogs")
+
+    RESET = "\033[0m"
+    CYAN = "\033[36m"
+    art = r"""
+    
+           /$$                 /$$       /$$
+          | $$                | $$      | $$
+  /$$$$$$$| $$   /$$ /$$   /$$| $$  /$$$$$$$
+ /$$_____/| $$  /$$/| $$  | $$| $$ /$$__  $$
+|  $$$$$$ | $$$$$$/ | $$  | $$| $$| $$  | $$
+ \____  $$| $$_  $$ | $$  | $$| $$| $$  | $$
+ /$$$$$$$/| $$ \  $$|  $$$$$$/| $$|  $$$$$$$
+|_______/ |__/  \__/ \______/ |__/ \_______/
+    """.lstrip("\n")
+
+    print(CYAN + art + RESET, end="")
+    print(CYAN + "Skuld — WakaTime + Git → Jira worklogs" + RESET)
     print("")
     print("Common commands:")
     print("  • Configure credentials:  skuld start")
-    print("  • Map this repo:         skuld add")
-    print("  • Default sync (incremental since last sync):")
-    print("      skuld sync            # or add --test for a dry-run")
+    print("  • Map this repo:          skuld add")
+    print("  • Sync since last sync:   skuld sync # or add --test for a dry-run")
     print("  • Explicit periods:       skuld sync today | yesterday | week")
     print("")
     print(f"Config: {str(cfg_path)}    State: {os.path.expanduser(state_path)}")
+    print("")
     print("Notes:")
     print("  - By default, Skuld does NOT post separate issue comments; only worklogs.")
     print("    Enable with: comment.issueCommentsEnabled: true in ~/.skuld.yaml")
