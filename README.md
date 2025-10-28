@@ -16,7 +16,7 @@ Skuld — WakaTime + Git → Jira worklogs
   <a href="https://www.npmjs.com/package/skuld-cli">
     <img src="https://img.shields.io/npm/v/skuld-cli.svg?logo=npm" alt="npm version">
   </a>
-  &nbsp;
+
   <a href="https://www.npmjs.com/package/skuld-cli">
     <img src="https://img.shields.io/npm/dm/skuld-cli.svg?label=downloads&logo=npm" alt="npm downloads">
   </a>
