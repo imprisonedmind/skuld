@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.19
+- CLI: show ASCII banner and improved welcome/usage text.
+- Docs: add README banner and npm badges.
+
 ## v0.1.18
 - Feature: new `branches` command to list recent WakaTime branches and map them to Jira keys. Supports `--interactive`, `--set BRANCH KEY`, `--unset BRANCH`, `--list`, and `--days N` (default 7 days).
 - Allocation: when a branch name lacks an embedded Jira key, Skuld now uses per‑repo `branchIssues` mappings from `~/.skuld.yaml` to attribute WakaTime time to the correct issue.
